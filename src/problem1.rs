@@ -30,14 +30,12 @@
 /// puzzle input), then add together all the fuel values.
 
 /// What is the sum of the fuel requirements for all of the modules on your spacecraft?
-
 use std::error;
 use std::fs;
-use std::io::{self, BufRead};
-use std::num;
 use std::path::Path;
 
-// A result with a boxed error type.
+// A result with a boxed error type. We use a box here to allow us to represent
+// multiple different possible error types.
 type BoxedErrorResult<T> = std::result::Result<T, Box<dyn error::Error>>;
 
 pub fn run() {
@@ -53,7 +51,7 @@ pub fn run() {
     };
 
     let fuels = masses.into_iter().map(fuel_for_mass);
-    let total_fuel : u64 = fuels.sum();
+    let total_fuel: u64 = fuels.sum();
 
     println!("Problem 1:");
     println!("==========");
@@ -65,12 +63,10 @@ fn fuel_for_mass(mass: u64) -> u64 {
 }
 
 fn read_masses(path: &Path) -> BoxedErrorResult<Vec<u64>> {
-    let file = fs::File::open(path)?;
-    let reader = io::BufReader::new(file);
+    let file_content = fs::read_to_string(path)?;
 
-    let masses: Result<Vec<u64>, num::ParseIntError> = reader
+    let masses: Result<Vec<u64>, _> = file_content
         .lines()
-        .filter_map(Result::ok) // filter out incomplete lines
         .map(|line| line.parse::<u64>())
         .collect();
 
