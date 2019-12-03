@@ -68,6 +68,7 @@
 /// all up at the end.)
 use std::error;
 use std::fs;
+use std::num;
 use std::path::Path;
 
 // A result with a boxed error type. We use a box here to allow us to represent
@@ -123,7 +124,7 @@ fn fuel_for_mass(mass: u64) -> u64 {
 fn read_masses(path: &Path) -> BoxedErrorResult<Vec<u64>> {
     let file_content = fs::read_to_string(path)?;
 
-    let masses: Result<Vec<u64>, _> = file_content
+    let masses: Result<Vec<u64>, num::ParseIntError> = file_content
         .lines()
         .map(|line| line.parse::<u64>())
         .collect();
