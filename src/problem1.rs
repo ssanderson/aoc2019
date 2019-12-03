@@ -109,10 +109,9 @@ fn fuel_for_mass(mass: u64) -> u64 {
     let initial_fuel = basic_fuel_for_mass(mass);
 
     let next_fuel = |m: &u64| {
-        let needed = basic_fuel_for_mass(*m);
-        match needed {
+        match basic_fuel_for_mass(*m) {
             0 => None,
-            _ => Some(needed),
+            n => Some(n),
         }
     };
 
