@@ -108,15 +108,14 @@ fn basic_fuel_for_mass(mass: u64) -> u64 {
 fn fuel_for_mass(mass: u64) -> u64 {
     let initial_fuel = basic_fuel_for_mass(mass);
 
-    let next_fuel = |m: &u64| {
-        match basic_fuel_for_mass(*m) {
+    // Iterator that iteratively calls next_fuel on the previous result until
+    // None is returned.
+    let incremental_fuels = std::iter::successors(Some(initial_fuel), |mass: &u64| {
+        match basic_fuel_for_mass(*mass) {
             0 => None,
             n => Some(n),
         }
-    };
-
-    // Iteratively call next_fuel until we get a None.
-    let incremental_fuels = std::iter::successors(Some(initial_fuel), next_fuel);
+    });
 
     return incremental_fuels.sum();
 }
