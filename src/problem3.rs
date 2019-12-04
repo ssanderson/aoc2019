@@ -152,9 +152,7 @@ mod wire {
                 Some('L') => Segment::Left(parse_length()?),
                 Some('R') => Segment::Right(parse_length()?),
                 Some(c) => return Err(ParseError::BadDirection(c)),
-                None => {
-                    return Err(ParseError::EmptySegment);
-                }
+                None => return Err(ParseError::EmptySegment),
             };
 
             Ok(parsed)
