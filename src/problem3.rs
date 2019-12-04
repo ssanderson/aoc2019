@@ -183,10 +183,10 @@ mod wire {
         }
 
         pub fn intersect(&self, other: &Wire) -> HashSet<Point> {
-            let left: HashSet<Point> = self.points.iter().cloned().collect();
-            let right: HashSet<Point> = other.points.iter().cloned().collect();
+            let left: HashSet<&Point> = self.points.iter().collect();
+            let right: HashSet<&Point> = other.points.iter().collect();
 
-            left.intersection(&right).cloned().collect()
+            left.intersection(&right).map(|p| *p.clone()).collect()
         }
 
         pub fn delay_for(&self, point: &Point) -> Option<usize> {
