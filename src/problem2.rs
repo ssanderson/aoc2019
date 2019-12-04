@@ -282,7 +282,8 @@ pub fn run() {
     println!("Problem 2:");
     println!("==========");
 
-    // Part 1
+    println!("\nPart 1");
+    println!("------");
     match program.run(12, 2, 0) {
         Ok(result) => {
             println!("Output Value at Index 0: {}", result);
@@ -292,7 +293,8 @@ pub fn run() {
         }
     }
 
-    // Part 2
+    println!("\nPart 2");
+    println!("------");
     for noun in 0..100 {
         for verb in 0..100 {
             match program.run(noun, verb, 0) {
@@ -301,8 +303,8 @@ pub fn run() {
                     println!("Answer is: {}", noun * 100 + verb);
                     return;
                 }
-                Ok(result) => {
-                    println!("Got {} from noun={}, verb={}", result, noun, verb);
+                Ok(_result) => {
+                    // println!("Got {} from noun={}, verb={}", result, noun, verb);
                 }
                 Err(e) => {
                     println!("Error executing for noun={}, verb={}: {:?}", noun, verb, e);
