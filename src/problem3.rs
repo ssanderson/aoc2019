@@ -97,7 +97,10 @@
 /// U62,R66,U55,R34,D71,R55,D58,R83 = 610 steps
 /// R98,U47,R26,D63,R33,U87,L62,D20,R33,U53,R51
 /// U98,R91,D20,R16,D67,R40,U7,R15,U6,R7 = 410 steps
-/// What is the fewest combined steps the wires must take to reach an intersection?
+
+/// What is the fewest combined steps the wires must take to reach an
+/// intersection?
+
 use std::fs;
 use std::path::Path;
 
@@ -122,6 +125,7 @@ mod wire {
         EmptySegment,
         BadPrefix(char),
         BadInt(String),
+        WrongNumberOfWires(usize),
     }
 
     impl fmt::Display for ParseError {
@@ -159,28 +163,40 @@ mod wire {
 
     #[derive(Debug)]
     pub struct Wire {
-        segments: Vec<Segment>,
+        // Sequence of points the wire passes through. Does not include
+        // starting at the origin.
+        points: Vec<Point>,
     }
 
     impl Wire {
-        pub fn intersect(&self, other: &Wire) -> HashSet<Point> {
-            self.trace().intersection(&other.trace()).cloned().collect()
-        }
-
-        fn trace(&self) -> HashSet<Point> {
-            let mut points: HashSet<Point> = HashSet::new();
+        fn from_segments(segments: Vec<Segment>) -> Wire {
+            let mut points: Vec<Point> = Vec::new();
             let mut pos = Point::new(0, 0);
 
-            for segment in &self.segments {
-                let new_points = pos.points_along_segment(*segment);
-                for point in new_points.iter() {
-                    points.insert(*point);
+            for segment in segments {
+                let mut new_points = pos.points_along_segment(segment);
+                if new_points.len() > 0 {
+                    pos = *new_points.last().unwrap();
+                    points.append(&mut new_points);
                 }
-                pos = *new_points.last().unwrap();
             }
 
-            points
+            Wire { points }
         }
+
+        pub fn intersect(&self, other: &Wire) -> HashSet<Point> {
+            let left: HashSet<Point> = self.points.iter().cloned().collect();
+            let right: HashSet<Point> = other.points.iter().cloned().collect();
+
+            left.intersection(&right).cloned().collect()
+        }
+
+        pub fn delay_for(&self, point: &Point) -> Option<usize> {
+            // Add 1 because the point at index 0 has a signal delay of 1 (we
+            // don't store the starting point of the origin in self.points).
+            self.points.iter().position(|p| p == point).map(|x| x + 1)
+        }
+
     }
 
     impl FromStr for Wire {
@@ -190,9 +206,7 @@ mod wire {
             let segments: Result<Vec<Segment>, ParseError> =
                 s.split(",").map(|part| part.parse::<Segment>()).collect();
 
-            Ok(Wire {
-                segments: segments?,
-            })
+            Ok(Wire::from_segments(segments?))
         }
     }
 
@@ -263,18 +277,37 @@ pub fn run() {
     match read_wires(&input_path) {
         Ok((first, second)) => {
             let intersection = first.intersect(&second);
+
+            println!("\nPart 1");
+            println!("------");
             let closest_to_origin: &Point = intersection
                 .iter()
                 .min_by_key(|p| p.manhattan_distance_from_origin())
                 .expect("Lines do not intersect!");
 
-            println!("Part 1");
-            println!("------");
             println!("Closest point to origin is {:?}.", closest_to_origin);
             println!(
-                "Distance is {:?}.",
+                "Distance is {}.",
                 closest_to_origin.manhattan_distance_from_origin()
             );
+
+            println!("\nPart 2");
+            println!("------");
+
+            let total_delay = |p: &&Point| -> usize {
+                // Unwraps are safe here b/c we know these points are in
+                // the trace of both wires.
+                first.delay_for(p).unwrap() + second.delay_for(p).unwrap()
+            };
+
+            let least_delay: &Point = intersection
+                .iter()
+                .min_by_key(total_delay)
+                .expect("Lines do not intersect!");
+
+            println!("Shortest delay point is {:?}", least_delay);
+            println!("Delay is {}", total_delay(&least_delay));
+
         }
         Err(e) => {
             println!("Failed to read input.\nError was: {}", e);
@@ -285,17 +318,16 @@ pub fn run() {
 
 fn read_wires(path: &Path) -> BoxedErrorResult<(Wire, Wire)> {
     let file_content = fs::read_to_string(path)?;
-    let lines: Result<Vec<Wire>, ParseError> = file_content
+    let parsed: Result<Vec<Wire>, ParseError> = file_content
         .lines()
         .map(|line| line.parse::<Wire>())
         .collect();
 
-    let mut lines = lines?;
+    let mut wires = parsed?;
 
-    // TODO: Clean up these.
-    if lines.len() != 2 {
-        panic!("Expected 2 lines.");
-    } else {
-        Ok((lines.pop().unwrap(), lines.pop().unwrap()))
+    match wires.len() {
+        2 => Ok((wires.pop().unwrap(), wires.pop().unwrap())),
+        n => Err(ParseError::WrongNumberOfWires(n).into()),
     }
+
 }
