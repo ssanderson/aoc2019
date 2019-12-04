@@ -160,19 +160,6 @@ mod intcode {
         }
     }
 
-    fn to_u64(op: Op) -> u64 {
-        match op {
-            Op::Add => 1,
-            Op::Mul => 2,
-            Op::Exit => 99,
-            Op::Value(i) => i,
-        }
-    }
-
-    fn to_usize(op: Op) -> usize {
-        to_u64(op) as usize
-    }
-
     #[derive(Debug)]
     pub enum ExecuteError {
         OutOfBounds(usize),
@@ -187,7 +174,7 @@ mod intcode {
 
     /// An IntCode program.
     pub struct Program {
-        ops: Vec<Op>,
+        ops: Vec<u64>,
     }
 
     impl Program {
@@ -209,7 +196,7 @@ mod intcode {
         /// Construct a Program from a vector of u64s.
         pub fn from_opcodes(vec: Vec<u64>) -> Program {
             Program {
-                ops: vec.iter().cloned().map(from_u64).collect(),
+                ops: vec,
             }
         }
 
@@ -222,13 +209,13 @@ mod intcode {
 
     /// A single program execution.
     struct Execution {
-        state: Vec<Op>,
+        state: Vec<u64>,
     }
 
     impl Execution {
-        pub fn new(mut state: Vec<Op>, noun: u64, verb: u64) -> Execution {
-            state[1] = from_u64(noun);
-            state[2] = from_u64(verb);
+        pub fn new(mut state: Vec<u64>, noun: u64, verb: u64) -> Execution {
+            state[1] = noun;
+            state[2] = verb;
 
             Execution { state: state }
         }
@@ -239,7 +226,7 @@ mod intcode {
             }
             let mut pos: usize = 0;
             loop {
-                let op = self.state[pos];
+                let op = from_u64(self.state[pos]);
                 match op {
                     Op::Add => {
                         self.do_binop(pos, |x, y| x + y);
@@ -258,22 +245,22 @@ mod intcode {
                 }
             }
 
-            Ok(to_u64(self.state[output_ix]))
+            Ok(self.state[output_ix])
         }
 
         fn do_binop<F>(&mut self, pos: usize, f: F)
         where
             F: FnOnce(u64, u64) -> u64,
         {
-            let lhs_ix = to_usize(self.state[pos + 1]);
-            let lhs = to_u64(self.state[lhs_ix]);
+            let lhs_ix = self.state[pos + 1] as usize;
+            let lhs = self.state[lhs_ix];
 
-            let rhs_ix = to_usize(self.state[pos + 2]);
-            let rhs = to_u64(self.state[rhs_ix]);
+            let rhs_ix = self.state[pos + 2] as usize;
+            let rhs = self.state[rhs_ix];
 
-            let dest = to_usize(self.state[pos + 3]);
+            let dest = self.state[pos + 3] as usize;
 
-            self.state[dest] = from_u64(f(lhs, rhs));
+            self.state[dest] = f(lhs, rhs);
         }
     }
 }
