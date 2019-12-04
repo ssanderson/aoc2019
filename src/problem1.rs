@@ -66,14 +66,11 @@
 /// spacecraft when also taking into account the mass of the added fuel?
 /// (Calculate the fuel requirements for each module separately, then add them
 /// all up at the end.)
-use std::error;
 use std::fs;
 use std::num;
 use std::path::Path;
 
-// A result with a boxed error type. We use a box here to allow us to represent
-// multiple different possible error types.
-type BoxedErrorResult<T> = std::result::Result<T, Box<dyn error::Error>>;
+use crate::utils::BoxedErrorResult;
 
 pub fn run() {
     let here = Path::new(file!()).parent().unwrap();
