@@ -123,7 +123,7 @@ mod wire {
     #[derive(Debug)]
     pub enum ParseError {
         EmptySegment,
-        BadPrefix(char),
+        BadDirection(char),
         BadInt(String),
         WrongNumberOfWires(usize),
     }
@@ -151,7 +151,7 @@ mod wire {
                 Some('D') => Segment::Down(parse_length()?),
                 Some('L') => Segment::Left(parse_length()?),
                 Some('R') => Segment::Right(parse_length()?),
-                Some(c) => return Err(ParseError::BadPrefix(c)),
+                Some(c) => return Err(ParseError::BadDirection(c)),
                 None => {
                     return Err(ParseError::EmptySegment);
                 }
