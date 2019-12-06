@@ -8,16 +8,14 @@ use crate::utils::BoxedErrorResult;
 
 #[derive(Debug, Clone, Copy)]
 enum Op {
-    Add {
-        lhs_mode: ParameterMode,
-        rhs_mode: ParameterMode,
-    },
-    Mul {
-        lhs_mode: ParameterMode,
-        rhs_mode: ParameterMode,
-    },
+    Add(ParameterMode, ParameterMode),
+    Mul(ParameterMode, ParameterMode),
     Input,
     Output(ParameterMode),
+    JumpIfTrue(ParameterMode, ParameterMode),
+    JumpIfFalse(ParameterMode, ParameterMode),
+    LessThan(ParameterMode, ParameterMode),
+    EqualTo(ParameterMode, ParameterMode),
     Exit,
     Value(i64),
 }
@@ -81,16 +79,14 @@ fn from_i64(i: i64) -> Option<Op> {
     }
 
     let result = match i % 100 {
-        1 => Op::Add {
-            lhs_mode: first_parameter_mode(i)?,
-            rhs_mode: second_parameter_mode(i)?,
-        },
-        2 => Op::Mul {
-            lhs_mode: first_parameter_mode(i)?,
-            rhs_mode: second_parameter_mode(i)?,
-        },
+        1 => Op::Add(first_parameter_mode(i)?, second_parameter_mode(i)?),
+        2 => Op::Mul(first_parameter_mode(i)?, second_parameter_mode(i)?),
         3 => Op::Input,
         4 => Op::Output(first_parameter_mode(i)?),
+        5 => Op::JumpIfTrue(first_parameter_mode(i)?, second_parameter_mode(i)?),
+        6 => Op::JumpIfFalse(first_parameter_mode(i)?, second_parameter_mode(i)?),
+        7 => Op::LessThan(first_parameter_mode(i)?, second_parameter_mode(i)?),
+        8 => Op::EqualTo(first_parameter_mode(i)?, second_parameter_mode(i)?),
         99 => Op::Exit,
         _ => Op::Value(i),
     };
@@ -244,13 +240,39 @@ impl Execution {
             let code = self.state[pos];
             let op = from_i64(code);
             match op {
-                Some(Op::Add { lhs_mode, rhs_mode }) => {
+                Some(Op::Add(lhs_mode, rhs_mode)) => {
                     self.do_binop(pos, lhs_mode, rhs_mode, |x, y| x + y);
                     pos += 4;
                 }
-                Some(Op::Mul { lhs_mode, rhs_mode }) => {
+                Some(Op::Mul(lhs_mode, rhs_mode)) => {
                     self.do_binop(pos, lhs_mode, rhs_mode, |x, y| x * y);
                     pos += 4;
+                }
+                Some(Op::LessThan(lhs_mode, rhs_mode)) => {
+                    self.do_binop(pos, lhs_mode, rhs_mode, |x, y| (x < y) as i64);
+                    pos += 4;
+                }
+                Some(Op::EqualTo(lhs_mode, rhs_mode)) => {
+                    self.do_binop(pos, lhs_mode, rhs_mode, |x, y| (x == y) as i64);
+                    pos += 4;
+                }
+                Some(Op::JumpIfTrue(test_mode, target_mode)) => {
+                    let test = self.do_read(self.state[pos + 1], test_mode);
+                    if test != 0 {
+                        pos = self.do_read(self.state[pos + 2], target_mode) as usize;
+                    }
+                    else {
+                        pos += 3;
+                    }
+                }
+                Some(Op::JumpIfFalse(test_mode, target_mode)) => {
+                    let test = self.do_read(self.state[pos + 1], test_mode);
+                    if test == 0 {
+                        pos = self.do_read(self.state[pos + 2], target_mode) as usize;
+                    }
+                    else {
+                        pos += 3;
+                    }
                 }
                 Some(Op::Input) => {
                     match io.input() {
