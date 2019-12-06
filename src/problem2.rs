@@ -136,145 +136,16 @@
 /// the answer would be 1202.)
 use std::path::Path;
 
-mod intcode {
-    use std::fs;
-    use std::num;
-    use std::path::Path;
-
-    use crate::utils::BoxedErrorResult;
-
-    #[derive(Debug, Clone, Copy)]
-    pub enum Op {
-        Add,
-        Mul,
-        Exit,
-        Value(u64),
-    }
-
-    fn from_u64(i: u64) -> Op {
-        match i {
-            1 => Op::Add,
-            2 => Op::Mul,
-            99 => Op::Exit,
-            _ => Op::Value(i),
-        }
-    }
-
-    #[derive(Debug)]
-    pub enum ExecuteError {
-        OutOfBounds(usize),
-        BadOp { op: Op, pos: usize },
-    }
-
-    // Bring enum variant constructors into scope.
-    use self::ExecuteError::*;
-
-    /// Result type for program executions.
-    pub type ExecuteResult<T> = Result<T, ExecuteError>;
-
-    /// An IntCode program.
-    pub struct Program {
-        ops: Vec<u64>,
-    }
-
-    impl Program {
-        /// Read a program from a file on disk.
-        pub fn read_from_path(path: &Path) -> BoxedErrorResult<Program> {
-            let file_content = fs::read_to_string(path)?;
-            let parsed: Result<Vec<u64>, num::ParseIntError> = file_content
-                .trim_end()
-                .split(",")
-                .map(|s| s.parse::<u64>())
-                .collect();
-
-            match parsed {
-                Ok(opcodes) => Ok(Self::from_opcodes(opcodes)),
-                Err(e) => Err(e.into()),
-            }
-        }
-
-        /// Construct a Program from a vector of u64s.
-        pub fn from_opcodes(vec: Vec<u64>) -> Program {
-            Program {
-                ops: vec,
-            }
-        }
-
-        /// Run the program on set of inputs.
-        pub fn run(&self, noun: u64, verb: u64, output_index: usize) -> ExecuteResult<u64> {
-            let state = Execution::new(self.ops.clone(), noun, verb);
-            state.simulate(output_index)
-        }
-    }
-
-    /// A single program execution.
-    struct Execution {
-        state: Vec<u64>,
-    }
-
-    impl Execution {
-        pub fn new(mut state: Vec<u64>, noun: u64, verb: u64) -> Execution {
-            state[1] = noun;
-            state[2] = verb;
-
-            Execution { state: state }
-        }
-
-        pub fn simulate(mut self, output_ix: usize) -> ExecuteResult<u64> {
-            if self.state.len() <= output_ix {
-                return ExecuteResult::Err(OutOfBounds(output_ix));
-            }
-            let mut pos: usize = 0;
-            loop {
-                let op = from_u64(self.state[pos]);
-                match op {
-                    Op::Add => {
-                        self.do_binop(pos, |x, y| x + y);
-                        pos += 4;
-                    }
-                    Op::Mul => {
-                        self.do_binop(pos, |x, y| x * y);
-                        pos += 4;
-                    }
-                    Op::Exit => {
-                        break;
-                    }
-                    Op::Value(_) => {
-                        return ExecuteResult::Err(BadOp { op: op, pos: pos });
-                    }
-                }
-            }
-
-            Ok(self.state[output_ix])
-        }
-
-        fn do_binop<F>(&mut self, pos: usize, f: F)
-        where
-            F: FnOnce(u64, u64) -> u64,
-        {
-            let lhs_ix = self.state[pos + 1] as usize;
-            let lhs = self.state[lhs_ix];
-
-            let rhs_ix = self.state[pos + 2] as usize;
-            let rhs = self.state[rhs_ix];
-
-            let dest = self.state[pos + 3] as usize;
-
-            self.state[dest] = f(lhs, rhs);
-        }
-    }
-}
-
-use intcode::Program;
+use crate::intcode::Program;
 
 pub fn run() {
     let here = Path::new(file!()).parent().unwrap();
-    let input_path = here.join("problem2_input.txt");
+    let input_path = here.join("inputs/problem2_input.txt");
 
     let program = match Program::read_from_path(&input_path) {
         Ok(v) => v,
         Err(e) => {
-            println!("Failed to read Intcode:\nError was: {}", e);
+            println!("Failed to read program:\nError was: {}", e);
             return;
         }
     };
@@ -284,7 +155,7 @@ pub fn run() {
 
     println!("\nPart 1");
     println!("------");
-    match program.run(12, 2, 0) {
+    match program.run_problem2(12, 2, 0) {
         Ok(result) => {
             println!("Output Value at Index 0: {}", result);
         }
@@ -297,7 +168,7 @@ pub fn run() {
     println!("------");
     for noun in 0..100 {
         for verb in 0..100 {
-            match program.run(noun, verb, 0) {
+            match program.run_problem2(noun, verb, 0) {
                 Ok(19690720) => {
                     println!("Got target from noun={}, verb={}", noun, verb);
                     println!("Answer is: {}", noun * 100 + verb);
