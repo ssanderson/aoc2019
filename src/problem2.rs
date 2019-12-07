@@ -134,21 +134,12 @@
 /// Find the input noun and verb that cause the program to produce the output
 /// 19690720. What is 100 * noun + verb? (For example, if noun=12 and verb=2,
 /// the answer would be 1202.)
-use std::path::Path;
-
 use crate::intcode::Program;
+use crate::utils;
+use crate::utils::ProblemInput;
 
-pub fn run() {
-    let here = Path::new(file!()).parent().unwrap();
-    let input_path = here.join("inputs/problem2_input.txt");
-
-    let program = match Program::read_from_path(&input_path) {
-        Ok(v) => v,
-        Err(e) => {
-            println!("Failed to read program:\nError was: {}", e);
-            return;
-        }
-    };
+pub fn run() -> utils::ProblemResult<()> {
+    let program = Program::for_problem(2)?;
 
     println!("Problem 2:");
     println!("==========");
@@ -172,15 +163,15 @@ pub fn run() {
                 Ok(19690720) => {
                     println!("Got target from noun={}, verb={}", noun, verb);
                     println!("Answer is: {}", noun * 100 + verb);
-                    return;
+                    return Ok(());
                 }
-                Ok(_result) => {
-                    // println!("Got {} from noun={}, verb={}", result, noun, verb);
-                }
+                Ok(_result) => {}
                 Err(e) => {
                     println!("Error executing for noun={}, verb={}: {:?}", noun, verb, e);
                 }
             }
         }
     }
+
+    utils::bail("Failed to find answer!")
 }

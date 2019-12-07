@@ -1,10 +1,6 @@
 use std::error::Error;
 use std::fmt;
-use std::fs;
-use std::path::Path;
 use std::str::FromStr;
-
-use crate::utils::BoxedErrorResult;
 
 #[derive(Debug, Clone, Copy)]
 enum Op {
@@ -179,12 +175,6 @@ pub struct Program {
 }
 
 impl Program {
-    /// Read a program from a file on disk.
-    pub fn read_from_path(path: &Path) -> BoxedErrorResult<Program> {
-        let file_content = fs::read_to_string(path)?;
-        file_content.parse::<Program>().map_err(|e| e.into())
-    }
-
     /// Construct a Program from a vector of i64s.
     pub fn new(code: Vec<i64>) -> Program {
         Program { code: code }
@@ -260,8 +250,7 @@ impl Execution {
                     let test = self.do_read(self.state[pos + 1], test_mode);
                     if test != 0 {
                         pos = self.do_read(self.state[pos + 2], target_mode) as usize;
-                    }
-                    else {
+                    } else {
                         pos += 3;
                     }
                 }
@@ -269,8 +258,7 @@ impl Execution {
                     let test = self.do_read(self.state[pos + 1], test_mode);
                     if test == 0 {
                         pos = self.do_read(self.state[pos + 2], target_mode) as usize;
-                    }
-                    else {
+                    } else {
                         pos += 3;
                     }
                 }

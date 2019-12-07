@@ -165,22 +165,12 @@
 /// number, the diagnostic code.
 
 /// What is the diagnostic code for system ID 5?
-
-use std::path::Path;
-
 use crate::intcode::{Program, StaticIO};
+use crate::utils;
+use crate::utils::ProblemInput;
 
-pub fn run() {
-    let here = Path::new(file!()).parent().unwrap();
-    let input_path = here.join("inputs/problem5_input.txt");
-
-    let program = match Program::read_from_path(&input_path) {
-        Ok(v) => v,
-        Err(e) => {
-            println!("Failed to read program from path {:?}:\n{}", input_path, e);
-            return;
-        }
-    };
+pub fn run() -> utils::ProblemResult<()> {
+    let program = Program::for_problem(5)?;
 
     // Part 1
     println!("Part 1");
@@ -206,9 +196,8 @@ pub fn run() {
         Ok(_) => {
             let outputs = io.outputs();
             println!("{:?}", outputs);
+            Ok(())
         }
-        Err(e) => {
-            println!("Error executing program:\n{}", e);
-        }
+        Err(e) => utils::bail(&format!("Error executing program:\n{}", e)),
     }
 }

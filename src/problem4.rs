@@ -11,7 +11,6 @@
 /// Two adjacent digits are the same (like 22 in 122345).
 /// Going from left to right, the digits never decrease; they only ever increase or stay the same (like 111123 or 135679).
 
-
 /// Other than the range rule, the following are true:
 
 /// 111111 meets these criteria (double 11, never decreases).
@@ -33,8 +32,9 @@
 /// 111122 meets the criteria (even though 1 is repeated more than twice, it still contains a double 22).
 
 /// How many different passwords within the range given in your puzzle input meet all of the criteria?
+use crate::utils;
 
-pub fn run() {
+pub fn run() -> utils::ProblemResult<()> {
     let mut count1 = 0;
     let mut count2 = 0;
     let mut buf: [u8; 6] = [0; 6];
@@ -53,10 +53,12 @@ pub fn run() {
 
     println!("Num Valid Passwords (Part 1): {}", count1);
     println!("Num Valid Passwords (Part 2): {}", count2);
+
+    Ok(())
 }
 
 fn is_valid_password1(pw: &[u8; 6]) -> bool {
-    return digits_are_monotonic(pw) && contains_repeat(pw)
+    return digits_are_monotonic(pw) && contains_repeat(pw);
 }
 
 fn is_valid_password2(pw: &[u8; 6]) -> bool {
@@ -67,16 +69,16 @@ fn digits_are_monotonic(pw: &[u8; 6]) -> bool {
     pw.windows(2).all(|x| x[0] <= x[1])
 }
 
-fn contains_repeat(pw: &[u8; 6]) -> bool{
+fn contains_repeat(pw: &[u8; 6]) -> bool {
     pw.windows(2).any(|x| x[0] == x[1])
 }
 
 fn contains_exact_repeat(pw: &[u8; 6]) -> bool {
     let at_start = (pw[0] == pw[1]) && (pw[1] != pw[2]);
     let at_end = (pw[4] == pw[5]) && (pw[3] != pw[4]);
-    let internal = pw.windows(4).any(|x| {
-        (x[0] != x[1]) && (x[1] == x[2]) && (x[2] != x[3])
-    });
+    let internal = pw
+        .windows(4)
+        .any(|x| (x[0] != x[1]) && (x[1] == x[2]) && (x[2] != x[3]));
 
     at_start || at_end || internal
 }

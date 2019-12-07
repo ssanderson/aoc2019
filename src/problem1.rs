@@ -70,19 +70,13 @@ use std::fs;
 use std::num;
 use std::path::Path;
 
-use crate::utils::BoxedErrorResult;
+use crate::utils::ProblemResult;
 
-pub fn run() {
+pub fn run() -> ProblemResult<()> {
     let here = Path::new(file!()).parent().unwrap();
-    let input_path = here.join("problem1_input.txt");
+    let input_path = here.join("inputs/problem1_input.txt");
 
-    let masses = match read_masses(&input_path) {
-        Ok(v) => v,
-        Err(e) => {
-            println!("Failed to read masses. \nError was: {}", e);
-            return;
-        }
-    };
+    let masses = read_masses(&input_path)?;
 
     println!("Problem 1:");
     println!("==========");
@@ -96,6 +90,8 @@ pub fn run() {
     let fuels = masses.into_iter().map(fuel_for_mass);
     let total_fuel: u64 = fuels.sum();
     println!("Total Fuel Required for Part 2: {}", total_fuel);
+
+    Ok(())
 }
 
 fn basic_fuel_for_mass(mass: u64) -> u64 {
@@ -118,7 +114,7 @@ fn fuel_for_mass(mass: u64) -> u64 {
     return incremental_fuels.sum();
 }
 
-fn read_masses(path: &Path) -> BoxedErrorResult<Vec<u64>> {
+fn read_masses(path: &Path) -> ProblemResult<Vec<u64>> {
     let file_content = fs::read_to_string(path)?;
 
     let masses: Result<Vec<u64>, num::ParseIntError> = file_content

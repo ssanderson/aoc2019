@@ -130,7 +130,7 @@ use std::fs;
 use std::path::Path;
 use std::str::FromStr;
 
-use crate::utils::BoxedErrorResult;
+use crate::utils;
 
 #[derive(Debug)]
 struct Orbits {
@@ -218,7 +218,6 @@ impl Orbits {
     }
 }
 
-
 fn find_depths(node: &str, tree: &HashMap<String, Vec<String>>) -> HashMap<String, u64> {
     let mut out: HashMap<String, u64> = HashMap::new();
     find_depths_helper(node, tree, &mut out, 0);
@@ -283,12 +282,12 @@ impl fmt::Display for OrbitParseError {
 
 impl Error for OrbitParseError {}
 
-fn read_orbits(path: &Path) -> BoxedErrorResult<Orbits> {
+fn read_orbits(path: &Path) -> utils::ProblemResult<Orbits> {
     let file_content = fs::read_to_string(path)?;
     file_content.parse::<Orbits>().map_err(|e| e.into())
 }
 
-pub fn run() {
+pub fn run() -> utils::ProblemResult<()> {
     let here = Path::new(file!()).parent().unwrap();
     let input_path = here.join("inputs/problem6_input.txt");
 
@@ -314,9 +313,9 @@ pub fn run() {
             // perform. For each node between YOU and parent(SAN), we add one
             // node to the path, and one hop.
             println!("Number of Orbital Transitions: {}", path.len() - 2);
+
+            Ok(())
         }
-        Err(e) => {
-            println!("Error reading orbits:\n {}", e);
-        }
+        Err(e) => utils::bail(&format!("Error reading orbits:\n {}", e)),
     }
 }

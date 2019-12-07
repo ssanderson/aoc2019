@@ -100,11 +100,10 @@
 
 /// What is the fewest combined steps the wires must take to reach an
 /// intersection?
+use std::str;
 
-use std::fs;
-use std::path::Path;
-
-use crate::utils::BoxedErrorResult;
+use crate::utils;
+use crate::utils::ProblemInput;
 
 mod wire {
     use std::collections::HashSet;
@@ -194,7 +193,6 @@ mod wire {
             // don't store the starting point of the origin in self.points).
             self.points.iter().position(|p| p == point).map(|x| x + 1)
         }
-
     }
 
     impl FromStr for Wire {
@@ -268,64 +266,64 @@ mod wire {
 
 use wire::{ParseError, Point, Wire};
 
-pub fn run() {
-    let here = Path::new(file!()).parent().unwrap();
-    let input_path = here.join("problem3_input.txt");
+struct WirePair {
+    first: Wire,
+    second: Wire,
+}
 
-    match read_wires(&input_path) {
-        Ok((first, second)) => {
-            let intersection = first.intersect(&second);
+impl str::FromStr for WirePair {
+    type Err = ParseError;
 
-            println!("\nPart 1");
-            println!("------");
-            let closest_to_origin: &Point = intersection
-                .iter()
-                .min_by_key(|p| p.manhattan_distance_from_origin())
-                .expect("Lines do not intersect!");
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let parsed: Result<Vec<Wire>, ParseError> =
+            s.lines().map(|line| line.parse::<Wire>()).collect();
 
-            println!("Closest point to origin is {:?}.", closest_to_origin);
-            println!(
-                "Distance is {}.",
-                closest_to_origin.manhattan_distance_from_origin()
-            );
+        let mut wires = parsed?;
 
-            println!("\nPart 2");
-            println!("------");
-
-            let total_delay = |p: &&Point| -> usize {
-                // Unwraps are safe here b/c we know these points are in
-                // the trace of both wires.
-                first.delay_for(p).unwrap() + second.delay_for(p).unwrap()
-            };
-
-            let least_delay: &Point = intersection
-                .iter()
-                .min_by_key(total_delay)
-                .expect("Lines do not intersect!");
-
-            println!("Shortest delay point is {:?}", least_delay);
-            println!("Delay is {}", total_delay(&least_delay));
-
-        }
-        Err(e) => {
-            println!("Failed to read input.\nError was: {}", e);
-            return;
+        match wires.len() {
+            2 => Ok(WirePair {
+                first: wires.pop().unwrap(),
+                second: wires.pop().unwrap(),
+            }),
+            n => Err(ParseError::WrongNumberOfWires(n).into()),
         }
     }
 }
 
-fn read_wires(path: &Path) -> BoxedErrorResult<(Wire, Wire)> {
-    let file_content = fs::read_to_string(path)?;
-    let parsed: Result<Vec<Wire>, ParseError> = file_content
-        .lines()
-        .map(|line| line.parse::<Wire>())
-        .collect();
+pub fn run() -> utils::ProblemResult<()> {
+    let WirePair { first, second } = WirePair::for_problem(3)?;
 
-    let mut wires = parsed?;
+    let intersection = first.intersect(&second);
 
-    match wires.len() {
-        2 => Ok((wires.pop().unwrap(), wires.pop().unwrap())),
-        n => Err(ParseError::WrongNumberOfWires(n).into()),
-    }
+    println!("\nPart 1");
+    println!("------");
+    let closest_to_origin: &Point = intersection
+        .iter()
+        .min_by_key(|p| p.manhattan_distance_from_origin())
+        .expect("Lines do not intersect!");
 
+    println!("Closest point to origin is {:?}.", closest_to_origin);
+    println!(
+        "Distance is {}.",
+        closest_to_origin.manhattan_distance_from_origin()
+    );
+
+    println!("\nPart 2");
+    println!("------");
+
+    let total_delay = |p: &&Point| -> usize {
+        // Unwraps are safe here b/c we know these points are in
+        // the trace of both wires.
+        first.delay_for(p).unwrap() + second.delay_for(p).unwrap()
+    };
+
+    let least_delay: &Point = intersection
+        .iter()
+        .min_by_key(total_delay)
+        .expect("Lines do not intersect!");
+
+    println!("Shortest delay point is {:?}", least_delay);
+    println!("Delay is {}", total_delay(&least_delay));
+
+    Ok(())
 }
