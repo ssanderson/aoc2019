@@ -54,3 +54,91 @@ where
         file_content.parse::<T>().map_err(|e| e.into())
     }
 }
+
+pub mod permute {
+    pub struct Permutations<T: Clone> {
+        values: Vec<T>,
+        ix: usize,
+        max_ix: usize,
+    }
+
+    impl<T: Clone> Permutations<T> {
+        fn new(values: Vec<T>) -> Permutations<T> {
+            let max_ix = (1..=values.len()).product();
+            Permutations {
+                values,
+                ix: 0,
+                max_ix,
+            }
+        }
+    }
+
+    impl<T: Clone> Iterator for Permutations<T> {
+        type Item = Vec<T>;
+
+        fn next(&mut self) -> Option<Self::Item> {
+            if self.ix == self.max_ix {
+                None
+            } else {
+                let indices = get_permutation(self.ix, self.values.len());
+                let out: Vec<T> = indices.iter().map(|&i| self.values[i].clone()).collect();
+
+                self.ix += 1;
+                Some(out)
+            }
+        }
+    }
+
+    pub fn permutations<T: Clone, C: Iterator<Item = T>>(values: C) -> Permutations<T> {
+        Permutations::new(values.collect())
+    }
+
+    fn get_permutation(mut i: usize, size: usize) -> Vec<usize> {
+        let mut modulus: usize = (1..=size).product();
+        let mut out: Vec<usize> = (0..size).collect();
+        let mut pos = 0;
+
+        while pos < size {
+            modulus /= size - pos;
+
+            let choice = (i / modulus) as usize;
+            out.swap(pos, pos + choice);
+
+            pos += 1;
+            i = i % modulus;
+        }
+
+        out
+    }
+
+    mod test {
+        #[test]
+        fn test_distinct_permutations() {
+            use std::collections::HashSet;
+            let set: HashSet<Vec<usize>> = super::permutations(0..5).collect();
+            assert_eq!(set.len(), 120);
+
+            for vec in set {
+                assert_eq!(vec.iter().cloned().collect::<HashSet<usize>>().len(), 5);
+            }
+        }
+
+        #[test]
+        fn test_distinct_permutations_6() {
+            use std::collections::HashSet;
+            let set: HashSet<Vec<usize>> = super::permutations(0..6).collect();
+            assert_eq!(set.len(), 720);
+
+            for vec in set {
+                assert_eq!(vec.iter().cloned().collect::<HashSet<usize>>().len(), 6);
+            }
+        }
+
+        #[test]
+        fn test_5_to_10() {
+            use std::collections::HashSet;
+            let set: HashSet<Vec<usize>> = super::permutations(5..10).collect();
+            assert_eq!(set.len(), 120);
+        }
+    }
+}

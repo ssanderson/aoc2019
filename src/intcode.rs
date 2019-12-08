@@ -13,7 +13,6 @@ enum Op {
     LessThan(ParameterMode, ParameterMode),
     EqualTo(ParameterMode, ParameterMode),
     Exit,
-    Value(i64),
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -84,7 +83,7 @@ fn from_i64(i: i64) -> Option<Op> {
         7 => Op::LessThan(first_parameter_mode(i)?, second_parameter_mode(i)?),
         8 => Op::EqualTo(first_parameter_mode(i)?, second_parameter_mode(i)?),
         99 => Op::Exit,
-        _ => Op::Value(i),
+        _ => return None,
     };
 
     Some(result)
@@ -104,6 +103,8 @@ impl fmt::Display for ExecuteError {
     }
 }
 
+impl Error for ExecuteError {}
+
 // Bring enum variant constructors into scope.
 use self::ExecuteError::*;
 
@@ -121,11 +122,12 @@ impl fmt::Display for ParseError {
 
 impl Error for ParseError {}
 
-pub trait IO {
+pub trait IO: fmt::Debug {
     fn input(&mut self) -> Option<i64>;
     fn output(&mut self, value: i64) -> Option<()>;
 }
 
+#[derive(Debug)]
 struct NoIO;
 
 impl IO for NoIO {
@@ -138,6 +140,7 @@ impl IO for NoIO {
     }
 }
 
+#[derive(Debug)]
 pub struct StaticIO {
     inputs: Vec<i64>,
     outputs: Vec<i64>,
@@ -180,8 +183,38 @@ impl Program {
         Program { code: code }
     }
 
-    pub fn run<T: IO>(&self, io: &mut T) -> ExecuteResult<Vec<i64>> {
-        Execution::new(self.code.clone()).simulate(io)
+    /// Run a single instance of the program to completion.
+    pub fn run<T: IO>(&self, io: &mut T) -> ExecuteResult<()> {
+        Execution::new(self.code.clone(), io).run_to_completion()?;
+        Ok(())
+    }
+
+    /// Run multiple instances of the program until all programs have halted.
+    /// Whenever a program performs output, switch between programs.
+    pub fn run_concurrently<T: IO>(&self, ios: &mut Vec<T>) -> ExecuteResult<()> {
+        use std::collections::VecDeque;
+
+        let mut run_queue: VecDeque<Execution<T>> = ios
+            .iter_mut()
+            .map(|io| Execution::new(self.code.clone(), io))
+            .collect();
+
+        while let Some(mut execution) = run_queue.pop_front() {
+            loop {
+                match execution.step()? {
+                    ExecState::Running => {}
+                    ExecState::DidOutput => {
+                        run_queue.push_back(execution);
+                        break;
+                    }
+                    ExecState::Halted => {
+                        break;
+                    }
+                }
+            }
+        }
+
+        Ok(())
     }
 
     /// Run the program on set of inputs.
@@ -194,7 +227,7 @@ impl Program {
         code_copy[1] = noun;
         code_copy[2] = verb;
 
-        let final_state = Execution::new(code_copy).simulate(&mut NoIO)?;
+        let final_state = Execution::new(code_copy, &mut NoIO).run_to_completion()?;
 
         Ok(final_state[output_index])
     }
@@ -215,89 +248,110 @@ impl FromStr for Program {
 }
 
 /// A single program execution.
-struct Execution {
+struct Execution<'a, T: IO> {
+    io: &'a mut T,
     state: Vec<i64>,
+    pos: usize,
 }
 
-impl Execution {
-    pub fn new(state: Vec<i64>) -> Execution {
-        Execution { state: state }
+enum ExecState {
+    Running,
+    DidOutput,
+    Halted,
+}
+
+impl<'a, T: IO> Execution<'a, T> {
+    pub fn new(state: Vec<i64>, io: &'a mut T) -> Execution<'a, T> {
+        Execution { state, io, pos: 0 }
     }
 
-    pub fn simulate<T: IO>(mut self, io: &mut T) -> ExecuteResult<Vec<i64>> {
-        let mut pos: usize = 0;
+    pub fn run_to_completion(mut self) -> ExecuteResult<Vec<i64>> {
         loop {
-            let code = self.state[pos];
-            let op = from_i64(code);
-            match op {
-                Some(Op::Add(lhs_mode, rhs_mode)) => {
-                    self.do_binop(pos, lhs_mode, rhs_mode, |x, y| x + y);
-                    pos += 4;
-                }
-                Some(Op::Mul(lhs_mode, rhs_mode)) => {
-                    self.do_binop(pos, lhs_mode, rhs_mode, |x, y| x * y);
-                    pos += 4;
-                }
-                Some(Op::LessThan(lhs_mode, rhs_mode)) => {
-                    self.do_binop(pos, lhs_mode, rhs_mode, |x, y| (x < y) as i64);
-                    pos += 4;
-                }
-                Some(Op::EqualTo(lhs_mode, rhs_mode)) => {
-                    self.do_binop(pos, lhs_mode, rhs_mode, |x, y| (x == y) as i64);
-                    pos += 4;
-                }
-                Some(Op::JumpIfTrue(test_mode, target_mode)) => {
-                    let test = self.do_read(self.state[pos + 1], test_mode);
-                    if test != 0 {
-                        pos = self.do_read(self.state[pos + 2], target_mode) as usize;
-                    } else {
-                        pos += 3;
-                    }
-                }
-                Some(Op::JumpIfFalse(test_mode, target_mode)) => {
-                    let test = self.do_read(self.state[pos + 1], test_mode);
-                    if test == 0 {
-                        pos = self.do_read(self.state[pos + 2], target_mode) as usize;
-                    } else {
-                        pos += 3;
-                    }
-                }
-                Some(Op::Input) => {
-                    match io.input() {
-                        Some(value) => {
-                            let dest = self.state[pos + 1] as usize;
-                            self.state[dest] = value
-                        }
-                        None => return ExecuteResult::Err(InputError),
-                    }
-                    pos += 2;
-                }
-                Some(Op::Output(mode)) => {
-                    let value = self.do_read(self.state[pos + 1], mode);
-                    match io.output(value) {
-                        Some(()) => {}
-                        None => return ExecuteResult::Err(OutputError),
-                    }
-                    pos += 2;
-                }
-                Some(Op::Exit) => {
+            match self.step()? {
+                ExecState::Halted => {
                     break;
                 }
-                Some(Op::Value(_)) | None => {
-                    return ExecuteResult::Err(BadOp { code, pos });
-                }
+                _ => {}
             }
         }
         Ok(self.state)
     }
 
-    fn do_binop<F>(&mut self, pos: usize, lhs_mode: ParameterMode, rhs_mode: ParameterMode, f: F)
+    pub fn step(&mut self) -> ExecuteResult<ExecState> {
+        let code = self.state[self.pos];
+        let op = from_i64(code);
+        match op {
+            Some(Op::Add(lhs_mode, rhs_mode)) => {
+                self.do_binop(lhs_mode, rhs_mode, |x, y| x + y);
+                self.pos += 4;
+            }
+            Some(Op::Mul(lhs_mode, rhs_mode)) => {
+                self.do_binop(lhs_mode, rhs_mode, |x, y| x * y);
+                self.pos += 4;
+            }
+            Some(Op::LessThan(lhs_mode, rhs_mode)) => {
+                self.do_binop(lhs_mode, rhs_mode, |x, y| (x < y) as i64);
+                self.pos += 4;
+            }
+            Some(Op::EqualTo(lhs_mode, rhs_mode)) => {
+                self.do_binop(lhs_mode, rhs_mode, |x, y| (x == y) as i64);
+                self.pos += 4;
+            }
+            Some(Op::JumpIfTrue(test_mode, target_mode)) => {
+                let test = self.do_read(self.state[self.pos + 1], test_mode);
+                if test != 0 {
+                    self.pos = self.do_read(self.state[self.pos + 2], target_mode) as usize;
+                } else {
+                    self.pos += 3;
+                }
+            }
+            Some(Op::JumpIfFalse(test_mode, target_mode)) => {
+                let test = self.do_read(self.state[self.pos + 1], test_mode);
+                if test == 0 {
+                    self.pos = self.do_read(self.state[self.pos + 2], target_mode) as usize;
+                } else {
+                    self.pos += 3;
+                }
+            }
+            Some(Op::Input) => {
+                match self.io.input() {
+                    Some(value) => {
+                        let dest = self.state[self.pos + 1] as usize;
+                        self.state[dest] = value
+                    }
+                    None => return Err(InputError),
+                }
+                self.pos += 2;
+            }
+            Some(Op::Output(mode)) => {
+                let value = self.do_read(self.state[self.pos + 1], mode);
+                match self.io.output(value) {
+                    Some(()) => {}
+                    None => return Err(OutputError),
+                }
+                self.pos += 2;
+                return Ok(ExecState::DidOutput);
+            }
+            Some(Op::Exit) => {
+                return Ok(ExecState::Halted);
+            }
+            None => {
+                return ExecuteResult::Err(BadOp {
+                    code,
+                    pos: self.pos,
+                });
+            }
+        }
+        Ok(ExecState::Running)
+    }
+
+    fn do_binop<F>(&mut self, lhs_mode: ParameterMode, rhs_mode: ParameterMode, f: F)
     where
         F: FnOnce(i64, i64) -> i64,
     {
-        let lhs = self.do_read(self.state[pos + 1], lhs_mode);
-        let rhs = self.do_read(self.state[pos + 2], rhs_mode);
-        let dest = self.state[pos + 3] as usize;
+        let lhs = self.do_read(self.state[self.pos + 1], lhs_mode);
+        let rhs = self.do_read(self.state[self.pos + 2], rhs_mode);
+        let dest = self.state[self.pos + 3] as usize;
 
         self.state[dest] = f(lhs, rhs);
     }
