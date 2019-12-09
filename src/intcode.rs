@@ -4,14 +4,15 @@ use std::str::FromStr;
 
 #[derive(Debug, Clone, Copy)]
 enum Op {
-    Add(ParameterMode, ParameterMode),
-    Mul(ParameterMode, ParameterMode),
-    Input,
+    Add(ParameterMode, ParameterMode, ParameterMode),
+    Mul(ParameterMode, ParameterMode, ParameterMode),
+    Input(ParameterMode),
     Output(ParameterMode),
     JumpIfTrue(ParameterMode, ParameterMode),
     JumpIfFalse(ParameterMode, ParameterMode),
-    LessThan(ParameterMode, ParameterMode),
-    EqualTo(ParameterMode, ParameterMode),
+    LessThan(ParameterMode, ParameterMode, ParameterMode),
+    EqualTo(ParameterMode, ParameterMode, ParameterMode),
+    AdjustRelativeBase(ParameterMode),
     Exit,
 }
 
@@ -19,6 +20,7 @@ enum Op {
 enum ParameterMode {
     Position,
     Immediate,
+    Relative,
 }
 
 impl ParameterMode {
@@ -26,6 +28,7 @@ impl ParameterMode {
         match i {
             0 => Some(Self::Position),
             1 => Some(Self::Immediate),
+            2 => Some(Self::Relative),
             _ => None,
         }
     }
@@ -37,6 +40,10 @@ fn hundreds_digit(i: i64) -> i64 {
 
 fn thousands_digit(i: i64) -> i64 {
     (i % 10000) / 1000
+}
+
+fn ten_thousands_digit(i: i64) -> i64 {
+    (i % 100000) / 10000
 }
 
 mod tests {
@@ -68,20 +75,37 @@ fn second_parameter_mode(i: i64) -> Option<ParameterMode> {
     ParameterMode::from_i64(thousands_digit(i))
 }
 
-fn from_i64(i: i64) -> Option<Op> {
-    if i > 3000 {
-        return None;
-    }
+fn third_parameter_mode(i: i64) -> Option<ParameterMode> {
+    ParameterMode::from_i64(ten_thousands_digit(i))
+}
 
+fn from_i64(i: i64) -> Option<Op> {
     let result = match i % 100 {
-        1 => Op::Add(first_parameter_mode(i)?, second_parameter_mode(i)?),
-        2 => Op::Mul(first_parameter_mode(i)?, second_parameter_mode(i)?),
-        3 => Op::Input,
+        1 => Op::Add(
+            first_parameter_mode(i)?,
+            second_parameter_mode(i)?,
+            third_parameter_mode(i)?,
+        ),
+        2 => Op::Mul(
+            first_parameter_mode(i)?,
+            second_parameter_mode(i)?,
+            third_parameter_mode(i)?,
+        ),
+        3 => Op::Input(first_parameter_mode(i)?),
         4 => Op::Output(first_parameter_mode(i)?),
         5 => Op::JumpIfTrue(first_parameter_mode(i)?, second_parameter_mode(i)?),
         6 => Op::JumpIfFalse(first_parameter_mode(i)?, second_parameter_mode(i)?),
-        7 => Op::LessThan(first_parameter_mode(i)?, second_parameter_mode(i)?),
-        8 => Op::EqualTo(first_parameter_mode(i)?, second_parameter_mode(i)?),
+        7 => Op::LessThan(
+            first_parameter_mode(i)?,
+            second_parameter_mode(i)?,
+            third_parameter_mode(i)?,
+        ),
+        8 => Op::EqualTo(
+            first_parameter_mode(i)?,
+            second_parameter_mode(i)?,
+            third_parameter_mode(i)?,
+        ),
+        9 => Op::AdjustRelativeBase(first_parameter_mode(i)?),
         99 => Op::Exit,
         _ => return None,
     };
@@ -252,6 +276,7 @@ struct Execution<'a, T: IO> {
     io: &'a mut T,
     state: Vec<i64>,
     pos: usize,
+    relative_base: i64,
 }
 
 enum ExecState {
@@ -262,7 +287,12 @@ enum ExecState {
 
 impl<'a, T: IO> Execution<'a, T> {
     pub fn new(state: Vec<i64>, io: &'a mut T) -> Execution<'a, T> {
-        Execution { state, io, pos: 0 }
+        Execution {
+            state,
+            io,
+            pos: 0,
+            relative_base: 0,
+        }
     }
 
     pub fn run_to_completion(mut self) -> ExecuteResult<Vec<i64>> {
@@ -281,50 +311,49 @@ impl<'a, T: IO> Execution<'a, T> {
         let code = self.state[self.pos];
         let op = from_i64(code);
         match op {
-            Some(Op::Add(lhs_mode, rhs_mode)) => {
-                self.do_binop(lhs_mode, rhs_mode, |x, y| x + y);
+            Some(Op::Add(lhs_mode, rhs_mode, dest_mode)) => {
+                self.do_binop(lhs_mode, rhs_mode, dest_mode, |x, y| x + y)?;
                 self.pos += 4;
             }
-            Some(Op::Mul(lhs_mode, rhs_mode)) => {
-                self.do_binop(lhs_mode, rhs_mode, |x, y| x * y);
+            Some(Op::Mul(lhs_mode, rhs_mode, dest_mode)) => {
+                self.do_binop(lhs_mode, rhs_mode, dest_mode, |x, y| x * y)?;
                 self.pos += 4;
             }
-            Some(Op::LessThan(lhs_mode, rhs_mode)) => {
-                self.do_binop(lhs_mode, rhs_mode, |x, y| (x < y) as i64);
+            Some(Op::LessThan(lhs_mode, rhs_mode, dest_mode)) => {
+                self.do_binop(lhs_mode, rhs_mode, dest_mode, |x, y| (x < y) as i64)?;
                 self.pos += 4;
             }
-            Some(Op::EqualTo(lhs_mode, rhs_mode)) => {
-                self.do_binop(lhs_mode, rhs_mode, |x, y| (x == y) as i64);
+            Some(Op::EqualTo(lhs_mode, rhs_mode, dest_mode)) => {
+                self.do_binop(lhs_mode, rhs_mode, dest_mode, |x, y| (x == y) as i64)?;
                 self.pos += 4;
             }
             Some(Op::JumpIfTrue(test_mode, target_mode)) => {
-                let test = self.do_read(self.state[self.pos + 1], test_mode);
+                let test = self.do_read(self.pos + 1, test_mode)?;
                 if test != 0 {
-                    self.pos = self.do_read(self.state[self.pos + 2], target_mode) as usize;
+                    self.pos = self.do_read(self.pos + 2, target_mode)? as usize;
                 } else {
                     self.pos += 3;
                 }
             }
             Some(Op::JumpIfFalse(test_mode, target_mode)) => {
-                let test = self.do_read(self.state[self.pos + 1], test_mode);
+                let test = self.do_read(self.pos + 1, test_mode)?;
                 if test == 0 {
-                    self.pos = self.do_read(self.state[self.pos + 2], target_mode) as usize;
+                    self.pos = self.do_read(self.pos + 2, target_mode)? as usize;
                 } else {
                     self.pos += 3;
                 }
             }
-            Some(Op::Input) => {
+            Some(Op::Input(mode)) => {
                 match self.io.input() {
                     Some(value) => {
-                        let dest = self.state[self.pos + 1] as usize;
-                        self.state[dest] = value
+                        self.do_write(self.pos + 1, mode, value)?;
                     }
                     None => return Err(InputError),
                 }
                 self.pos += 2;
             }
             Some(Op::Output(mode)) => {
-                let value = self.do_read(self.state[self.pos + 1], mode);
+                let value = self.do_read(self.pos + 1, mode)?;
                 match self.io.output(value) {
                     Some(()) => {}
                     None => return Err(OutputError),
@@ -334,6 +363,11 @@ impl<'a, T: IO> Execution<'a, T> {
             }
             Some(Op::Exit) => {
                 return Ok(ExecState::Halted);
+            }
+            Some(Op::AdjustRelativeBase(mode)) => {
+                let value = self.do_read(self.pos + 1, mode)?;
+                self.relative_base += value;
+                self.pos += 2;
             }
             None => {
                 return ExecuteResult::Err(BadOp {
@@ -345,21 +379,63 @@ impl<'a, T: IO> Execution<'a, T> {
         Ok(ExecState::Running)
     }
 
-    fn do_binop<F>(&mut self, lhs_mode: ParameterMode, rhs_mode: ParameterMode, f: F)
+    fn do_binop<F>(
+        &mut self,
+        lhs_mode: ParameterMode,
+        rhs_mode: ParameterMode,
+        dest_mode: ParameterMode,
+        f: F,
+    ) -> ExecuteResult<()>
     where
         F: FnOnce(i64, i64) -> i64,
     {
-        let lhs = self.do_read(self.state[self.pos + 1], lhs_mode);
-        let rhs = self.do_read(self.state[self.pos + 2], rhs_mode);
-        let dest = self.state[self.pos + 3] as usize;
+        let lhs = self.do_read(self.pos + 1, lhs_mode)?;
+        let rhs = self.do_read(self.pos + 2, rhs_mode)?;
+        self.do_write(self.pos + 3, dest_mode, f(lhs, rhs))?;
 
-        self.state[dest] = f(lhs, rhs);
+        Ok(())
     }
 
-    fn do_read(&self, param: i64, mode: ParameterMode) -> i64 {
+    fn do_read(&mut self, pos: usize, mode: ParameterMode) -> ExecuteResult<i64> {
+        let param = self.state[pos];
         match mode {
-            ParameterMode::Position => self.state[param as usize],
-            ParameterMode::Immediate => param,
+            ParameterMode::Position | ParameterMode::Relative => {
+                Ok(self.read_raw(self.as_address(param, mode)?))
+            }
+            ParameterMode::Immediate => Ok(param),
+        }
+    }
+
+    fn do_write(&mut self, pos: usize, mode: ParameterMode, value: i64) -> ExecuteResult<()> {
+        let param = self.state[pos];
+        let dest = self.as_address(param, mode)?;
+
+        self.write_raw(dest, value);
+
+        Ok(())
+    }
+
+    fn read_raw(&mut self, ix: usize) -> i64 {
+        self.ensure_capacity(ix);
+        self.state[ix]
+    }
+
+    fn write_raw(&mut self, ix: usize, value: i64) {
+        self.ensure_capacity(ix);
+        self.state[ix] = value;
+    }
+
+    fn as_address(&self, param: i64, mode: ParameterMode) -> ExecuteResult<usize> {
+        match mode {
+            ParameterMode::Position => Ok(param as usize),
+            ParameterMode::Relative => Ok((param + self.relative_base) as usize),
+            ParameterMode::Immediate => panic!("Can't take address of immediate"),
+        }
+    }
+
+    fn ensure_capacity(&mut self, ix: usize) {
+        if ix >= self.state.len() {
+            self.state.resize(ix + 1, 0);
         }
     }
 }
