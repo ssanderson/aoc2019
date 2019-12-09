@@ -31,7 +31,7 @@ impl fmt::Display for SimpleError {
 
 impl Error for SimpleError {}
 
-pub fn bail(msg: &str) -> ProblemResult<()> {
+pub fn bail<T>(msg: &str) -> ProblemResult<T> {
     Err(SimpleError::new(msg).into())
 }
 
@@ -42,16 +42,18 @@ where
     fn for_problem(n: u64) -> ProblemResult<Self>;
 }
 
+pub fn read_problem_file(n: u64) -> ProblemResult<String> {
+    let here = Path::new(file!()).parent().unwrap();
+    let input_path = here.join(format!("inputs/problem{}_input.txt", n));
+    Ok(fs::read_to_string(input_path)?)
+}
+
 impl<T: FromStr> ProblemInput for T
 where
     <T as std::str::FromStr>::Err: 'static + std::error::Error,
 {
     fn for_problem(n: u64) -> ProblemResult<T> {
-        let here = Path::new(file!()).parent().unwrap();
-        let input_path = here.join(format!("inputs/problem{}_input.txt", n));
-        let file_content = fs::read_to_string(input_path)?;
-
-        file_content.parse::<T>().map_err(|e| e.into())
+        Ok(read_problem_file(n)?.parse::<T>()?)
     }
 }
 
