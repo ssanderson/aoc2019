@@ -125,6 +125,91 @@ Best is 11,13 with 210 other asteroids detected:
 Find the best location for a new monitoring station. How many other asteroids
 can be detected from that location?
 
+--- Part Two ---
+
+Once you give them the coordinates, the Elves quickly deploy an Instant
+Monitoring Station to the location and discover the worst: there are simply too
+many asteroids.
+
+The only solution is complete vaporization by giant laser.
+
+Fortunately, in addition to an asteroid scanner, the new monitoring station
+also comes equipped with a giant rotating laser perfect for vaporizing
+asteroids. The laser starts by pointing up and always rotates clockwise,
+vaporizing any asteroid it hits.
+
+If multiple asteroids are exactly in line with the station, the laser only has
+enough power to vaporize one of them before continuing its rotation. In other
+words, the same asteroids that can be detected can be vaporized, but if
+vaporizing one asteroid makes another one detectable, the newly-detected
+asteroid won't be vaporized until the laser has returned to the same position
+by rotating a full 360 degrees.
+
+For example, consider the following map, where the asteroid with the new
+monitoring station (and laser) is marked X:
+
+.#....#####...#..
+##...##.#####..##
+##...#...#.#####.
+..#.....X...###..
+..#.#.....#....##
+
+The first nine asteroids to get vaporized, in order, would be:
+
+.#....###24...#..
+##...##.13#67..9#
+##...#...5.8####.
+..#.....X...###..
+..#.#.....#....##
+
+Note that some asteroids (the ones behind the asteroids marked 1, 5, and 7)
+won't have a chance to be vaporized until the next full rotation. The laser
+continues rotating; the next nine to be vaporized are:
+
+.#....###.....#..
+##...##...#.....#
+##...#......1234.
+..#.....X...5##..
+..#.9.....8....76
+
+The next nine to be vaporized are then:
+
+.8....###.....#..
+56...9#...#.....#
+34...7...........
+..2.....X....##..
+..1..............
+
+Finally, the laser completes its first full rotation (1 through 3), a second
+rotation (4 through 8), and vaporizes the last asteroid (9) partway through its
+third rotation:
+
+......234.....6..
+......1...5.....7
+.................
+........X....89..
+.................
+
+In the large example above (the one with the best monitoring station location
+at 11,13):
+
+The 1st asteroid to be vaporized is at 11,12.
+The 2nd asteroid to be vaporized is at 12,1.
+The 3rd asteroid to be vaporized is at 12,2.
+The 10th asteroid to be vaporized is at 12,8.
+The 20th asteroid to be vaporized is at 16,0.
+The 50th asteroid to be vaporized is at 16,9.
+The 100th asteroid to be vaporized is at 10,16.
+The 199th asteroid to be vaporized is at 9,6.
+The 200th asteroid to be vaporized is at 8,2.
+The 201st asteroid to be vaporized is at 10,9.
+The 299th and final asteroid to be vaporized is at 11,1.
+
+The Elves are placing bets on which will be the 200th asteroid to be
+vaporized. Win the bet by determining which asteroid that will be; what do you
+get if you multiply its X coordinate by 100 and then add its Y coordinate? (For
+example, 8,2 becomes 802.)
+
  */
 
 use std::collections::HashSet;
@@ -140,27 +225,55 @@ enum Space {
     Empty,
 }
 
+type Coord = (usize, usize);
+
 #[derive(Debug)]
 struct AsteroidMap {
-    data: Vec<Space>,
+    asteroids: HashSet<Coord>,
     pub nrows: usize,
     pub ncols: usize,
 }
 
-type Coord = (usize, usize);
-
 impl AsteroidMap {
-    pub fn new(data: Vec<Space>, nrows: usize, ncols: usize) -> AsteroidMap {
-        AsteroidMap { data, nrows, ncols }
+    pub fn new(asteroids: HashSet<Coord>, nrows: usize, ncols: usize) -> AsteroidMap {
+        AsteroidMap {
+            asteroids,
+            nrows,
+            ncols,
+        }
     }
 
-    // pub fn best_station_coord(&self) -> Coord {
-    //     let coords = (0..self.ncols).flat_map(|j| (0..self.nrows).map(move |i| (i, j)));
-    //     let max_visible = coords.max_by(|coord| self.num_visible(coord)
-    // }
+    pub fn best_station_coord(&self) -> (Coord, u64) {
+        self.asteroids
+            .iter()
+            .map(|&c| (c, self.num_visible_from(c)))
+            .max_by_key(|(_c, v)| *v)
+            .unwrap()
+    }
+
+    pub fn destruction_order(mut self, coord: Coord) -> Vec<Coord> {
+        let directions = all_directions(self.nrows, self.ncols);
+
+        let mut out = Vec::new();
+
+        // > 1 because we never destroy ``coord``.
+        while self.asteroids.len() > 1 {
+            for dir in directions.iter() {
+                match self.cast_ray(coord, *dir) {
+                    Some(destroyed) => {
+                        out.push(destroyed);
+                        self.asteroids.remove(&destroyed);
+                    }
+                    None => {},
+                }
+            }
+        }
+
+        out
+    }
 
     /// Count number of asteroids visible from a cell.
-    pub fn num_visible_from(&self, coord: Coord) -> Option<u64> {
+    fn num_visible_from(&self, coord: Coord) -> u64 {
         let mut count = 0;
 
         for direction in all_directions(self.nrows, self.ncols) {
@@ -169,7 +282,7 @@ impl AsteroidMap {
             }
         }
 
-        Some(count)
+        count
     }
 
     fn cast_ray(&self, (mut x, mut y): Coord, (dx, dy): (i64, i64)) -> Option<Coord> {
@@ -192,7 +305,11 @@ impl AsteroidMap {
         if x >= self.ncols || y >= self.nrows {
             None
         } else {
-            Some(self.data[y * self.ncols + x])
+            if self.asteroids.contains(&(x, y)) {
+                Some(Space::Asteroid)
+            } else {
+                Some(Space::Empty)
+            }
         }
     }
 }
@@ -223,12 +340,21 @@ impl FromStr for AsteroidMap {
                 lengths
             )))
         } else {
-            let nlines = lines.len();
-            Ok(AsteroidMap::new(
-                lines.into_iter().flatten().collect(),
-                nlines,
-                *lengths.iter().nth(0).unwrap(),
-            ))
+            let mut asteroids = HashSet::new();
+            for (j, line) in lines.iter().enumerate() {
+                for (i, value) in line.iter().enumerate() {
+                    match value {
+                        Space::Asteroid => {
+                            asteroids.insert((i, j));
+                        }
+                        Space::Empty => {},
+                    }
+                }
+            }
+
+            let nrows = lines.len();
+            let ncols = *lengths.iter().nth(0).unwrap();
+            Ok(AsteroidMap::new(asteroids, nrows, ncols))
         }
     }
 }
@@ -319,15 +445,13 @@ mod tests {
 pub fn run() -> ProblemResult<()> {
     let map = AsteroidMap::for_problem(10)?;
 
-    // println!("{:?}", all_directions(3, 3));
-
     // Part 1
-    let coords = (0..map.ncols).flat_map(|j| (0..map.nrows).map(move |i| (i, j)));
-    let max_visible = coords
-        .filter_map(|coord| map.num_visible_from(coord))
-        .max()
-        .unwrap();
-    println!("Max visibility: {}", max_visible);
+    let (station, max_visible) = map.best_station_coord();
+    println!("Max visibility: {} at {:?}", max_visible, station);
+
+    // Part 2
+    let coords = map.destruction_order(station);
+    println!("200th asteroid: {:?}", coords[199]);
 
     Ok(())
 }
