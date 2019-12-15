@@ -12,6 +12,7 @@ mod problem6;
 mod problem7;
 mod problem8;
 mod problem9;
+mod problem10;
 
 fn main() -> utils::ProblemResult<()> {
     let args: Vec<String> = env::args().collect();
@@ -27,6 +28,7 @@ fn main() -> utils::ProblemResult<()> {
             "7" => problem7::run(),
             "8" => problem8::run(),
             "9" => problem9::run(),
+            "10" => problem10::run(),
             _ => utils::bail(&format!("Unknown problem: {}", args[1])),
         },
         _ => utils::bail(&format!("Expected 1 arg, got {}", num_args)),
