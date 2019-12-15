@@ -118,18 +118,28 @@ registration identifier does it paint on your hull?
 
 */
 
+use std::cmp::{max, min};
 use std::collections::HashMap;
-use std::convert::{Into};
+use std::convert::Into;
 
 use crate::intcode::{Program, IO};
 use crate::utils::{ProblemInput, ProblemResult};
 
 type Coord = (i64, i64);
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Color {
     Black,
     White,
+}
+
+impl Into<char> for Color {
+    fn into(self) -> char {
+        match self {
+            Color::Black => '\u{2588}',
+            Color::White => '\u{2591}',
+        }
+    }
 }
 
 impl Into<i64> for Color {
@@ -176,51 +186,36 @@ impl From<i64> for Turn {
 }
 
 #[derive(Debug)]
-struct Hull {
-    pub panels: HashMap<Coord, Color>,
-}
-
-impl Hull {
-    fn new() -> Hull {
-        Hull {
-            panels: HashMap::new(),
-        }
-    }
-
-    fn paint(&mut self, coord: Coord, color: Color) {
-        self.panels.insert(coord, color);
-    }
-
-    fn color_at(&self, coord: &Coord) -> Color {
-        match self.panels.get(coord) {
-            Some(&color) => color,
-            None => Color::Black,
-        }
-    }
-}
-
-#[derive(Debug)]
 struct Robot {
-    pub hull: Hull,
+    pub panels: HashMap<Coord, Color>,
     position: Coord,
     direction: Direction,
 }
 
 impl Robot {
-    fn new() -> Robot {
+    fn new(start_color: Color) -> Robot {
+        let mut panels = HashMap::new();
+
+        if start_color == Color::White {
+            panels.insert((0, 0), Color::White);
+        }
+
         Robot {
-            hull: Hull::new(),
+            panels,
             position: (0, 0),
             direction: Direction::Up,
         }
     }
 
     fn current_color(&self) -> Color {
-        self.hull.color_at(&self.position)
+        match self.panels.get(&self.position) {
+            Some(&color) => color,
+            None => Color::Black,
+        }
     }
 
     fn paint(&mut self, color: Color) {
-        self.hull.paint(self.position, color);
+        self.panels.insert(self.position, color);
     }
 
     fn change_direction(&mut self, turn: Turn) {
@@ -270,7 +265,6 @@ impl<'a> RobotIO<'a> {
 }
 
 impl<'a> IO for RobotIO<'a> {
-
     fn input(&mut self) -> Option<i64> {
         Some(self.robot.current_color().into())
     }
@@ -280,27 +274,56 @@ impl<'a> IO for RobotIO<'a> {
             OutputState::ExpectingColor => {
                 self.robot.paint(Color::from(value));
                 OutputState::ExpectingDirection
-            },
+            }
             OutputState::ExpectingDirection => {
                 self.robot.change_direction(Turn::from(value));
                 self.robot.move_forward();
                 OutputState::ExpectingColor
-            },
+            }
         };
 
         Some(())
     }
+}
 
+fn render(panels: &HashMap<Coord, Color>) -> String {
+    let ((xmin, xmax), (ymin, ymax)) =
+        panels
+            .keys()
+            .fold(((0, 0), (0, 0)), |((xmin, xmax), (ymin, ymax)), &(x, y)| {
+                ((min(x, xmin), max(x, xmax)), (min(y, ymin), max(y, ymax)))
+            });
+
+    let mut out = String::new();
+    for j in (ymin..=(ymax + 1)).rev() {
+        for i in xmin..=(xmax + 1) {
+            let color: Color = *panels.get(&(i, j)).unwrap_or(&Color::Black);
+            out.push(color.into());
+        }
+        out.push('\n');
+    }
+    out
 }
 
 pub fn run() -> ProblemResult<()> {
     let program = Program::for_problem(11)?;
-    let mut robot = Robot::new();
-    let mut io = RobotIO::new(&mut robot);
 
-    program.run(&mut io)?;
+    // Part 1
+    {
+        let mut robot = Robot::new(Color::Black);
+        let mut io = RobotIO::new(&mut robot);
+        program.run(&mut io)?;
+        println!("Number of painted locations: {}", robot.panels.len());
+    }
 
-    println!("Number of painted locations: {}", robot.hull.panels.len());
+    // Part 2
+    {
+        let mut robot = Robot::new(Color::White);
+        let mut io = RobotIO::new(&mut robot);
+        program.run(&mut io)?;
+        println!("Number of painted locations: {}", robot.panels.len());
+        println!("Label:\n{}", render(&robot.panels));
+    }
 
     Ok(())
 }
