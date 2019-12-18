@@ -155,6 +155,7 @@ impl Game {
             }
             out.push('\n');
         }
+        print!("{}[2J", 27 as char); // Clear screen.
         println!("{}", out);
         println!("Score: {}", self.score.unwrap_or(0));
     }
@@ -166,6 +167,7 @@ impl Game {
 
 impl IO for Game {
     fn input(&mut self) -> Option<i64> {
+        self.paint_screen();
         match (self.ball, self.paddle) {
             (Some(ball), Some(paddle)) => {
                 match ball.0.cmp(&paddle.0) {
@@ -207,7 +209,6 @@ impl IO for Game {
                 self.state = IOState::Empty;
             }
         }
-
         Some(())
     }
 }
