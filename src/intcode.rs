@@ -241,6 +241,10 @@ impl Program {
         Ok(())
     }
 
+    pub fn set_address(&mut self, addr: usize, value: i64) {
+        self.code[addr] = value;
+    }
+
     /// Run the program on set of inputs.
     pub fn run_problem2(&self, noun: i64, verb: i64, output_index: usize) -> ExecuteResult<i64> {
         if self.code.len() <= output_index {
