@@ -264,7 +264,7 @@ impl AsteroidMap {
                         out.push(destroyed);
                         self.asteroids.remove(&destroyed);
                     }
-                    None => {},
+                    None => {}
                 }
             }
         }
@@ -335,7 +335,7 @@ impl FromStr for AsteroidMap {
         let lengths = lines.iter().map(|v| v.len()).collect::<HashSet<usize>>();
 
         if lengths.len() != 1 {
-            Err(SimpleError::new(&format!(
+            Err(SimpleError(format!(
                 "Line lengths not unique: {:?}",
                 lengths
             )))
@@ -347,7 +347,7 @@ impl FromStr for AsteroidMap {
                         Space::Asteroid => {
                             asteroids.insert((i, j));
                         }
-                        Space::Empty => {},
+                        Space::Empty => {}
                     }
                 }
             }

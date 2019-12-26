@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::error::Error;
 use std::fmt;
 use std::fs;
@@ -11,28 +12,23 @@ pub type BoxedErrorResult<T> = std::result::Result<T, Box<dyn Error>>;
 pub type ProblemResult<T> = BoxedErrorResult<T>;
 
 #[derive(Debug)]
-pub struct SimpleError {
-    msg: String,
-}
-
-impl SimpleError {
-    pub fn new(msg: &str) -> SimpleError {
-        SimpleError {
-            msg: msg.to_string(),
-        }
-    }
-}
+pub struct SimpleError(pub String);
 
 impl fmt::Display for SimpleError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.msg)
+        write!(f, "{}", self.0)
     }
 }
 
 impl Error for SimpleError {}
 
-pub fn bail<T>(msg: &str) -> ProblemResult<T> {
-    Err(SimpleError::new(msg).into())
+#[allow(dead_code)]
+pub fn dbg<T: fmt::Debug>(t: &T) {
+    println!("{:#?}", t);
+}
+
+pub fn bail<T, S: Into<String>>(msg: S) -> ProblemResult<T> {
+    Err(Box::new(SimpleError(msg.into())))
 }
 
 pub trait ProblemInput
@@ -50,10 +46,14 @@ pub fn read_problem_file(n: u64) -> ProblemResult<String> {
 
 impl<T: FromStr> ProblemInput for T
 where
-    <T as std::str::FromStr>::Err: 'static + std::error::Error,
+    <T as std::str::FromStr>::Err: Into<Box<dyn std::error::Error>>,
 {
     fn for_problem(n: u64) -> ProblemResult<T> {
-        Ok(read_problem_file(n)?.parse::<T>()?)
+        let s = read_problem_file(n)?;
+        match s.parse::<T>() {
+            Ok(parsed) => Ok(parsed),
+            Err(e) => Err(e.into()),
+        }
     }
 }
 
@@ -141,6 +141,22 @@ pub mod permute {
             use std::collections::HashSet;
             let set: HashSet<Vec<usize>> = super::permutations(5..10).collect();
             assert_eq!(set.len(), 120);
+        }
+    }
+}
+
+pub fn insert_or_merge<K, V, F>(map: &mut HashMap<K, V>, k: K, v: V, merge: F)
+where
+    F: FnOnce(V, V) -> V,
+    K: std::hash::Hash + Eq,
+    V: Clone,
+{
+    match map.get_mut(&k) {
+        Some(value_ref) => {
+            *value_ref = merge(value_ref.clone(), v);
+        }
+        None => {
+            map.insert(k, v);
         }
     }
 }

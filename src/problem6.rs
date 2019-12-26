@@ -316,6 +316,6 @@ pub fn run() -> utils::ProblemResult<()> {
 
             Ok(())
         }
-        Err(e) => utils::bail(&format!("Error reading orbits:\n {}", e)),
+        Err(e) => utils::bail(format!("Error reading orbits:\n {}", e)),
     }
 }

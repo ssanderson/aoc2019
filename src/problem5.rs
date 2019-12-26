@@ -198,6 +198,6 @@ pub fn run() -> utils::ProblemResult<()> {
             println!("{:?}", outputs);
             Ok(())
         }
-        Err(e) => utils::bail(&format!("Error executing program:\n{}", e)),
+        Err(e) => utils::bail(format!("Error executing program:\n{}", e)),
     }
 }

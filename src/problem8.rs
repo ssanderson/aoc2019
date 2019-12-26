@@ -96,7 +96,7 @@ impl Pixel {
             b'0' => Ok(Pixel::Black),
             b'1' => Ok(Pixel::White),
             b'2' => Ok(Pixel::Transparent),
-            _ => bail(&format!("Invalid pixel value: {}", byte)),
+            _ => bail(format!("Invalid pixel value: {}", byte)),
         }
     }
 
