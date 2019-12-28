@@ -123,13 +123,14 @@
 /// What is the minimum number of orbital transfers required to move from the
 /// object YOU are orbiting to the object SAN is orbiting? (Between the objects
 /// they are orbiting - not between YOU and SAN.)
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::error::Error;
 use std::fmt;
 use std::fs;
 use std::path::Path;
 use std::str::FromStr;
 
+use crate::tree::Tree;
 use crate::utils;
 
 #[derive(Debug)]
@@ -171,49 +172,10 @@ impl Orbits {
     pub fn distances_from_root(&self) -> HashMap<String, u64> {
         find_depths(&self.root, &self.children)
     }
+}
 
-    /// Find the shortest path from `start` to `end`.
-    pub fn shortest_path<'a>(&'a self, start: &'a str, end: &'a str) -> Vec<&'a str> {
-        let mut start_to_root = self.ancestors(start);
-
-        // If `end` is on the path from `start` to the root, return prefix of that path.
-        if let Some(n) = start_to_root.iter().position(|&item| item == end) {
-            start_to_root.split_off(n + 1);
-            return start_to_root;
-        }
-
-        // Otherwise, traverse up to the nearest common ancestor, then traverse back down.
-        let end_to_root = self.ancestors(end);
-        let common_ancestor: &str = {
-            let candidates: HashSet<&str> = start_to_root.iter().cloned().collect();
-            end_to_root
-                .iter()
-                .find(|&&x| candidates.contains(x))
-                .expect("No common ancestor!")
-        };
-
-        let prefix = start_to_root.iter().take_while(|&&x| x != common_ancestor);
-        let suffix = end_to_root
-            .iter()
-            .rev()
-            .skip_while(|&&x| x != common_ancestor);
-
-        prefix.chain(suffix).cloned().collect()
-    }
-
-    /// Get the path from `node` to `self.root`.
-    fn ancestors<'a>(&'a self, mut node: &'a str) -> Vec<&'a str> {
-        let mut out: Vec<&'a str> = vec![node];
-
-        while let Some(parent) = self.ancestors.get(node) {
-            out.push(parent);
-            node = parent;
-        }
-
-        out
-    }
-
-    fn parent(&self, node: &str) -> Option<&str> {
+impl<'a> Tree<&'a str> for &'a Orbits {
+    fn parent(&self, node: &'a str) -> Option<&'a str> {
         self.ancestors.get(node).map(|s| &s[..])
     }
 }
@@ -292,7 +254,7 @@ pub fn run() -> utils::ProblemResult<()> {
     let input_path = here.join("inputs/problem6_input.txt");
 
     match read_orbits(&input_path) {
-        Ok(orbits) => {
+        Ok(ref orbits) => {
             println!("Part 1");
             println!("------");
             let total: u64 = orbits.distances_from_root().values().sum();

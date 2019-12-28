@@ -367,10 +367,9 @@ impl Droid {
     }
 
     /// Compute the shortest path from self.location to goal.
-    fn path_to(&self, goal: &Coord) -> Vec<Coord> {
-        self.shortest_path(&self.location, goal)
+    fn path_to(&self, goal: Coord) -> Vec<Coord> {
+        self.shortest_path(self.location, goal)
             .into_iter()
-            .cloned()
             .collect()
     }
 
@@ -421,10 +420,10 @@ impl Droid {
     }
 }
 
-impl<'a> Tree<'a, Coord> for &'a Droid {
-    fn parent(&self, node: &'a Coord) -> Option<&'a Coord> {
-        match self.spanning_tree.get(node) {
-            Some(state) => state.parent.as_ref(),
+impl Tree<Coord> for Droid {
+    fn parent(&self, node: Coord) -> Option<Coord> {
+        match self.spanning_tree.get(&node) {
+            Some(state) => state.parent,
             None => None,
         }
     }
@@ -439,7 +438,7 @@ impl IO for Droid {
                 None => return None, // Nothing more to explore.
             };
 
-            self.plan = self.path_to(&new_goal).into_iter().collect();
+            self.plan = self.path_to(new_goal).into_iter().collect();
             self.plan.pop_front(); // Path contains current location. Remove it.
 
             assert!(self.plan.len() > 0);
