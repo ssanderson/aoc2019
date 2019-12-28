@@ -1,6 +1,9 @@
 use std::collections::HashSet;
+use std::hash::Hash;
 
-pub trait Tree<'a, T: std::hash::Hash + Eq + std::fmt::Debug> {
+/// Trait for implementing tree-traversal algorithms on any structure providing
+/// a parent-of relation.
+pub trait Tree<'a, T: Hash + Eq> {
     /// Get the parent of `node`.
     fn parent(&self, node: &'a T) -> Option<&'a T>;
 

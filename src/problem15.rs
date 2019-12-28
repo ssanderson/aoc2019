@@ -151,11 +151,12 @@ Although it hasn't changed, you can still get your puzzle input.
 
  */
 
+use std::collections::{HashMap, VecDeque};
+
 use crate::grid::{Coord, Grid, GridElem};
 use crate::intcode::{Program, IO};
 use crate::tree::Tree;
 use crate::utils::{ProblemInput, ProblemResult};
-use std::collections::{HashMap, VecDeque};
 
 #[derive(Debug, Clone, Copy)]
 enum MoveResult {
@@ -208,6 +209,15 @@ impl std::ops::Add<Direction> for Coord {
     }
 }
 
+fn neighbors(loc: Coord) -> [Coord; 4] {
+    [
+        loc + Direction::North,
+        loc + Direction::East,
+        loc + Direction::South,
+        loc + Direction::West,
+    ]
+}
+
 fn direction_between(here: Coord, there: Coord) -> Direction {
     match (there.0 - here.0, there.1 - here.1) {
         (1, 0) => Direction::East,
@@ -227,6 +237,15 @@ enum Tile {
     Wall,
     Oxygen,
     Start,
+}
+
+impl Tile {
+    fn passable(self) -> bool {
+        match self {
+            Tile::Wall => false,
+            _ => true,
+        }
+    }
 }
 
 impl Into<char> for Tile {
@@ -308,7 +327,7 @@ impl Droid {
     }
 
     fn mark_explored(&mut self, loc: Coord, tile: Tile) {
-        if self.grid.get(loc) != Tile::Unknown {
+        if self.grid.get(&loc) != Tile::Unknown {
             return;
         }
 
@@ -323,18 +342,17 @@ impl Droid {
                     .expect(&format!("Failed to get spanning tree info for {:?}", loc))
                     .depth;
 
-                for &direction in DIRECTIONS.iter() {
-                    let adjacent = loc + direction;
+                for adjacent in neighbors(loc).iter() {
                     match self.grid.get(adjacent) {
                         Tile::Unknown => {
                             self.spanning_tree.insert(
-                                adjacent,
+                                *adjacent,
                                 SpanningTreeState {
                                     parent: Some(loc),
                                     depth: depth + 1,
                                 },
                             );
-                            self.frontier.push_back(adjacent);
+                            self.frontier.push_back(*adjacent);
                         }
                         _ => {} // Already explored here.
                     }
@@ -342,8 +360,6 @@ impl Droid {
             }
             Tile::Unknown => unreachable!("Got unknown after explore: {:?}", loc),
         }
-        // println!("{}", self.grid.render());
-        // println!("===========================");
     }
 
     fn pop_unexplored(&mut self) -> Option<Coord> {
@@ -361,14 +377,49 @@ impl Droid {
     fn tree_depth(&self, loc: &Coord) -> Option<u64> {
         self.spanning_tree.get(&loc).map(|state| state.depth)
     }
-}
 
-const DIRECTIONS: [Direction; 4] = [
-    Direction::North,
-    Direction::South,
-    Direction::East,
-    Direction::West,
-];
+    fn passable_neighbors(&self, loc: Coord) -> Vec<Coord> {
+        neighbors(loc)
+            .iter()
+            .filter(|c| self.grid.get(c).passable())
+            .copied()
+            .collect()
+    }
+
+    fn max_distance_from(&self, start: Coord) -> u64 {
+        let mut tree: HashMap<Coord, SpanningTreeState> = HashMap::new();
+        tree.insert(
+            start,
+            SpanningTreeState {
+                parent: None,
+                depth: 0,
+            },
+        );
+
+        let mut queue = VecDeque::from(vec![start]);
+
+        while let Some(parent) = queue.pop_front() {
+            let parent_depth = tree.get(&parent).unwrap().depth;
+
+            for child in self.passable_neighbors(parent) {
+                if tree.get(&child).is_some() {
+                    continue;
+                }
+
+                tree.insert(
+                    child,
+                    SpanningTreeState {
+                        parent: Some(parent),
+                        depth: parent_depth + 1,
+                    },
+                );
+                queue.push_back(child);
+            }
+        }
+
+        tree.values().map(|v| v.depth).max().unwrap()
+    }
+}
 
 impl<'a> Tree<'a, Coord> for &'a Droid {
     fn parent(&self, node: &'a Coord) -> Option<&'a Coord> {
@@ -429,11 +480,19 @@ pub fn run() -> ProblemResult<()> {
     // status from an input() call.
     program.run(&mut droid).unwrap_err();
 
-    // Part 1.
+    println!("{}", droid.grid.render());
+
     match droid.oxygen {
         Some(ref loc) => {
+            // Part 1.
             println!("Found oxygen at {:?}", loc);
             println!("Steps from entrance: {:?}", droid.tree_depth(loc).unwrap());
+
+            // Part 2
+            println!(
+                "Max distance from oxygen: {:?}",
+                droid.max_distance_from(*loc)
+            );
         }
         None => panic!("Failed to find oxygen tank!"),
     }

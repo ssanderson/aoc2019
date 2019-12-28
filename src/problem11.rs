@@ -118,7 +118,6 @@ registration identifier does it paint on your hull?
 
 */
 
-use std::cmp::{max, min};
 use std::collections::HashMap;
 use std::convert::Into;
 
@@ -215,7 +214,7 @@ impl Robot {
     }
 
     fn current_color(&self) -> Color {
-        self.panels.get(self.position)
+        self.panels.get(&self.position)
     }
 
     fn paint(&mut self, color: Color) {
@@ -288,25 +287,6 @@ impl<'a> IO for RobotIO<'a> {
 
         Some(())
     }
-}
-
-fn render(panels: &HashMap<Coord, Color>) -> String {
-    let ((xmin, xmax), (ymin, ymax)) =
-        panels
-            .keys()
-            .fold(((0, 0), (0, 0)), |((xmin, xmax), (ymin, ymax)), &(x, y)| {
-                ((min(x, xmin), max(x, xmax)), (min(y, ymin), max(y, ymax)))
-            });
-
-    let mut out = String::new();
-    for j in (ymin..=(ymax + 1)).rev() {
-        for i in xmin..=(xmax + 1) {
-            let color: Color = *panels.get(&(i, j)).unwrap_or(&Color::Black);
-            out.push(color.into());
-        }
-        out.push('\n');
-    }
-    out
 }
 
 pub fn run() -> ProblemResult<()> {

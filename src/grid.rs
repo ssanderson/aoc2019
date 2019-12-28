@@ -19,8 +19,8 @@ impl<T: GridElem> Grid<T> {
         Self::new(HashMap::new())
     }
 
-    pub fn get(&self, coord: Coord) -> T {
-        *self.cells.get(&coord).unwrap_or(&Default::default())
+    pub fn get(&self, coord: &Coord) -> T {
+        *self.cells.get(coord).unwrap_or(&Default::default())
     }
 
     pub fn set(&mut self, coord: Coord, value: T) {
@@ -49,7 +49,7 @@ impl<T: GridElem> Grid<T> {
         let mut out = String::new();
         for j in (bounds.ymin..=(bounds.ymax + 1)).rev() {
             for i in bounds.xmin..=(bounds.xmax + 1) {
-                out.push(self.get((i, j)).into());
+                out.push(self.get(&(i, j)).into());
             }
             out.push('\n');
         }
