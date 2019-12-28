@@ -122,12 +122,11 @@ use std::cmp::{max, min};
 use std::collections::HashMap;
 use std::convert::Into;
 
+use crate::grid::{Coord, Grid, GridElem};
 use crate::intcode::{Program, IO};
 use crate::utils::{ProblemInput, ProblemResult};
 
-type Coord = (i64, i64);
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 enum Color {
     Black,
     White,
@@ -161,6 +160,14 @@ impl From<i64> for Color {
     }
 }
 
+impl Default for Color {
+    fn default() -> Color {
+        Color::Black
+    }
+}
+
+impl GridElem for Color {}
+
 #[derive(Debug, Clone, Copy)]
 enum Direction {
     Up,
@@ -187,7 +194,7 @@ impl From<i64> for Turn {
 
 #[derive(Debug)]
 struct Robot {
-    pub panels: HashMap<Coord, Color>,
+    pub panels: Grid<Color>,
     position: Coord,
     direction: Direction,
 }
@@ -201,21 +208,18 @@ impl Robot {
         }
 
         Robot {
-            panels,
+            panels: Grid::new(panels),
             position: (0, 0),
             direction: Direction::Up,
         }
     }
 
     fn current_color(&self) -> Color {
-        match self.panels.get(&self.position) {
-            Some(&color) => color,
-            None => Color::Black,
-        }
+        self.panels.get(self.position)
     }
 
     fn paint(&mut self, color: Color) {
-        self.panels.insert(self.position, color);
+        self.panels.set(self.position, color);
     }
 
     fn change_direction(&mut self, turn: Turn) {
@@ -313,7 +317,10 @@ pub fn run() -> ProblemResult<()> {
         let mut robot = Robot::new(Color::Black);
         let mut io = RobotIO::new(&mut robot);
         program.run(&mut io)?;
-        println!("Number of painted locations: {}", robot.panels.len());
+        println!(
+            "Number of painted locations: {}",
+            robot.panels.initialized_count()
+        );
     }
 
     // Part 2
@@ -321,8 +328,11 @@ pub fn run() -> ProblemResult<()> {
         let mut robot = Robot::new(Color::White);
         let mut io = RobotIO::new(&mut robot);
         program.run(&mut io)?;
-        println!("Number of painted locations: {}", robot.panels.len());
-        println!("Label:\n{}", render(&robot.panels));
+        println!(
+            "Number of painted locations: {}",
+            robot.panels.initialized_count()
+        );
+        println!("Label:\n{}", robot.panels.render());
     }
 
     Ok(())

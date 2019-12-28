@@ -150,7 +150,7 @@ impl FromStr for Term {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let parts: Vec<&str> = s.split(' ').collect();
         if parts.len() != 2 {
-            return bail(format!("Failed to parse term: {}", s));
+            return Err(format!("Failed to parse term: {}", s).into());
         }
         let amount: u64 = parts[0]
             .parse()

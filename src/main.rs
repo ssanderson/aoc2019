@@ -1,9 +1,17 @@
 use std::env;
 
+mod grid;
 mod intcode;
 mod utils;
+mod tree;
 
 mod problem1;
+mod problem10;
+mod problem11;
+mod problem12;
+mod problem13;
+mod problem14;
+mod problem15;
 mod problem2;
 mod problem3;
 mod problem4;
@@ -12,11 +20,6 @@ mod problem6;
 mod problem7;
 mod problem8;
 mod problem9;
-mod problem10;
-mod problem11;
-mod problem12;
-mod problem13;
-mod problem14;
 
 fn main() -> utils::ProblemResult<()> {
     let args: Vec<String> = env::args().collect();
@@ -37,6 +40,7 @@ fn main() -> utils::ProblemResult<()> {
             "12" => problem12::run(),
             "13" => problem13::run(),
             "14" => problem14::run(),
+            "15" => problem15::run(),
             _ => utils::bail(&format!("Unknown problem: {}", args[1])),
         },
         _ => utils::bail(&format!("Expected 1 arg, got {}", num_args)),
