@@ -131,8 +131,8 @@ what is the eight-digit message embedded in the final output list?
 
 */
 
+use std::cmp::min;
 use std::fmt;
-use std::iter::repeat;
 use std::str::FromStr;
 
 use crate::utils::{ProblemInput, ProblemResult};
@@ -142,26 +142,81 @@ struct Digits {
     data: Vec<i64>,
 }
 
+impl Digits {
+    fn replicated(mut self, n: usize) -> Digits {
+        let len = self.data.len();
+        self.data = self.data.into_iter().cycle().take(len * n).collect();
+        self
+    }
+}
+
 fn fft(mut data: Vec<i64>, phases: u64) -> Vec<i64> {
-    for _ in 1..=phases {
+    for i in 0..phases {
+        println!("Starting iteration {}", i);
         data = fft_iteration(data);
     }
     data
 }
 
 fn fft_iteration(data: Vec<i64>) -> Vec<i64> {
-    let mut out = Vec::new();
-    for ndigit in 1..=data.len() {
-        let pattern = [0, 1, 0, -1]
-            .iter()
-            .flat_map(|&i| repeat(i).take(ndigit))
-            .cycle()
-            .skip(1);
+    let mut out = Vec::with_capacity(data.len());
 
-        let raw_result: i64 = data.iter().zip(pattern).map(|(x, y)| x * y).sum();
-        out.push(raw_result.abs() % 10);
+    for ndigit in 1..=data.len() {
+        let result = fft_digit(&data, ndigit);
+        out.push(result);
+        println!("digit={} {}", ndigit, result);
     }
     out
+}
+
+fn fft_digit(data: &Vec<i64>, repeat_length: usize) -> i64 {
+    #[derive(Debug)]
+    struct FFTState<'a> {
+        data: &'a Vec<i64>,
+        ix: usize,
+        total: i64,
+    }
+
+    impl<'a> FFTState<'a> {
+        fn new(data: &'a Vec<i64>) -> FFTState<'a> {
+            FFTState {
+                data,
+                ix: 0,
+                total: 0,
+            }
+        }
+
+        fn result(self) -> i64 {
+            self.total.abs() % 10
+        }
+
+        fn done(&self) -> bool {
+            self.ix >= self.data.len()
+        }
+
+        fn skip(&mut self, n: usize) {
+            self.ix += n;
+        }
+
+        fn consume(&mut self, n: usize, mul_by: i64) {
+            for i in self.ix..min(self.data.len(), self.ix + n) {
+                self.total += self.data[i] * mul_by;
+            }
+            self.ix += n;
+        }
+    }
+
+    let mut state = FFTState::new(data);
+    state.skip(repeat_length - 1);
+
+    while !state.done() {
+        state.consume(repeat_length, 1);
+        state.skip(repeat_length);
+        state.consume(repeat_length, -1);
+        state.skip(repeat_length);
+    }
+
+    state.result()
 }
 
 impl FromStr for Digits {
@@ -197,7 +252,13 @@ impl std::error::Error for BadDigit {}
 pub fn run() -> ProblemResult<()> {
     let digits = Digits::for_problem(16)?;
 
-    let result = fft(digits.data, 100);
+    // Part 1
+    let result = fft(digits.data.clone(), 100);
+    println!("FFT(100): {:?}", &result[..8]);
+
+    // Part 2
+    let big_digits = digits.replicated(10000);
+    let result = fft(big_digits.data, 100);
     println!("FFT(100): {:?}", &result[..8]);
 
     Ok(())
