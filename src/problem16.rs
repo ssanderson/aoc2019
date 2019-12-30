@@ -132,6 +132,7 @@ what is the eight-digit message embedded in the final output list?
 */
 
 use std::cell::RefCell;
+use std::cmp::max;
 use std::collections::HashMap;
 use std::fmt;
 use std::iter::{repeat, successors};
@@ -184,10 +185,61 @@ impl Digits {
         for ix in 0..len {
             data.push(*memo.get(&MemoKey { ix, iteration: 0 }).unwrap());
         }
-
         data = data.into_iter().cycle().take(len * n).collect();
 
         Digits::from_vec(data)
+    }
+
+    fn message(&self, iterations: u64, offset: usize, len: usize) -> u64 {
+        self.precompute_tail(iterations, offset);
+
+        let digits: Vec<u8> = (offset..offset + len)
+            .map(|i| self.get(iterations, i))
+            .collect();
+
+        from_digits(&digits[..])
+    }
+
+    fn message_offset(&mut self) -> usize {
+        self.message(0, 0, 7) as usize
+    }
+
+    fn precompute_tail(&self, iterations: u64, offset: usize) {
+        let precompute_start = max(offset, self.len / 2 + 1);
+        let precompute_ixs = precompute_start..self.len;
+        for iteration in 1..=iterations {
+            let prev: Vec<(usize, u8)> = {
+
+                let memo = self.memo.borrow();
+                precompute_ixs
+                    .clone()
+                    .map(|ix| {
+                        let ref key = MemoKey {
+                            iteration: iteration - 1,
+                            ix,
+                        };
+                        (ix, *memo.get(&key).unwrap())
+                    })
+                    .collect()
+            };
+
+            {
+                let mut memo = self.memo.borrow_mut();
+                let mut cumsum: i64 = 0;
+
+                for &(ix, val) in prev.iter().rev() {
+                    cumsum += val as i64;
+                    memo.insert(
+                        MemoKey {
+                            iteration: iteration,
+                            ix: ix,
+                        },
+                        (cumsum.abs() % 10) as u8,
+                    );
+                }
+
+            }
+        }
     }
 
     fn get(&self, iteration: u64, ix: usize) -> u8 {
@@ -235,18 +287,6 @@ impl Digits {
             .filter(|&(_, coef)| coef != 0)
             .collect();
         coefs
-    }
-
-    fn message(&self, iterations: u64, offset: usize, len: usize) -> u64 {
-        let digits: Vec<u8> = (offset..offset + len)
-            .map(|i| self.get(iterations, i))
-            .collect();
-
-        from_digits(&digits[..])
-    }
-
-    fn message_offset(&mut self) -> usize {
-        self.message(0, 0, 7) as usize
     }
 }
 
@@ -299,10 +339,10 @@ pub fn run() -> ProblemResult<()> {
 
     // Part 2 (too slow to run)
 
-    // let mut big_digits = digits.replicated(10000);
-    // let offset = big_digits.message_offset();
-    // println!("message offset: {}", offset);
-    // println!("Secret Message: {}", big_digits.message(100, offset, 8));
+    let mut big_digits = digits.replicated(10000);
+    let offset = big_digits.message_offset();
+    println!("message offset: {}", offset);
+    println!("Secret Message: {}", big_digits.message(100, offset, 8));
 
     Ok(())
 }
