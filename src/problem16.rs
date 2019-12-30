@@ -131,110 +131,151 @@ what is the eight-digit message embedded in the final output list?
 
 */
 
-use std::cmp::min;
+use std::cell::RefCell;
+use std::collections::HashMap;
 use std::fmt;
+use std::iter::{repeat, successors};
+use std::rc::Rc;
 use std::str::FromStr;
 
 use crate::utils::{ProblemInput, ProblemResult};
 
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+struct MemoKey {
+    iteration: u64,
+    ix: usize,
+}
+
 #[derive(Debug)]
 struct Digits {
-    data: Vec<i64>,
+    len: usize,
+    // Memoized map from (iteration, index) -> result.  This is stored in a
+    // refcell to allow updating the memo table from non-mut methods.
+    memo: RefCell<HashMap<MemoKey, u8>>,
+    // Map from output index to (input_index, coefficient) pairs.
+    //
+    // Putting this in a refcell allows us to mutate it from non-mut methods, and
+    // returning refcounted pointers to the coefficients allows multiple
+    // recursive calls to borrow the same coefficient vector safely.
+    coefs: RefCell<HashMap<usize, Rc<Vec<(usize, i8)>>>>,
 }
 
 impl Digits {
-    fn replicated(mut self, n: usize) -> Digits {
-        let len = self.data.len();
-        self.data = self.data.into_iter().cycle().take(len * n).collect();
-        self
-    }
-}
+    fn from_vec(v: Vec<u8>) -> Digits {
+        let len = v.len();
+        let memo = v
+            .into_iter()
+            .enumerate()
+            .map(|(ix, val)| (MemoKey { iteration: 0, ix }, val))
+            .collect();
 
-fn fft(mut data: Vec<i64>, phases: u64) -> Vec<i64> {
-    for i in 0..phases {
-        println!("Starting iteration {}", i);
-        data = fft_iteration(data);
-    }
-    data
-}
-
-fn fft_iteration(data: Vec<i64>) -> Vec<i64> {
-    let mut out = Vec::with_capacity(data.len());
-
-    for ndigit in 1..=data.len() {
-        let result = fft_digit(&data, ndigit);
-        out.push(result);
-        println!("digit={} {}", ndigit, result);
-    }
-    out
-}
-
-fn fft_digit(data: &Vec<i64>, repeat_length: usize) -> i64 {
-    #[derive(Debug)]
-    struct FFTState<'a> {
-        data: &'a Vec<i64>,
-        ix: usize,
-        total: i64,
+        Digits {
+            len,
+            memo: RefCell::new(memo),
+            coefs: RefCell::new(HashMap::new()),
+        }
     }
 
-    impl<'a> FFTState<'a> {
-        fn new(data: &'a Vec<i64>) -> FFTState<'a> {
-            FFTState {
-                data,
-                ix: 0,
-                total: 0,
+    fn replicated(&self, n: usize) -> Digits {
+        let len = self.len;
+        let mut data = Vec::with_capacity(len * n);
+        let memo = self.memo.borrow();
+
+        for ix in 0..len {
+            data.push(*memo.get(&MemoKey { ix, iteration: 0 }).unwrap());
+        }
+
+        data = data.into_iter().cycle().take(len * n).collect();
+
+        Digits::from_vec(data)
+    }
+
+    fn get(&self, iteration: u64, ix: usize) -> u8 {
+        if ix >= self.len {
+            panic!("ix ({}) > self.len ({})", ix, self.len);
+        }
+
+        let ref key = MemoKey { iteration, ix };
+        if let Some(&value) = self.memo.borrow().get(key) {
+            return value;
+        }
+
+        let result: u8 = {
+            let mut tmp = 0;
+            let coefs = self.get_coefs(ix);
+            for &(sub_ix, coef) in coefs.iter() {
+                tmp += (coef as i64) * (self.get(iteration - 1, sub_ix) as i64);
             }
-        }
+            (tmp.abs() % 10) as u8
+        };
 
-        fn result(self) -> i64 {
-            self.total.abs() % 10
-        }
-
-        fn done(&self) -> bool {
-            self.ix >= self.data.len()
-        }
-
-        fn skip(&mut self, n: usize) {
-            self.ix += n;
-        }
-
-        fn consume(&mut self, n: usize, mul_by: i64) {
-            for i in self.ix..min(self.data.len(), self.ix + n) {
-                self.total += self.data[i] * mul_by;
-            }
-            self.ix += n;
-        }
+        self.memo.borrow_mut().insert(*key, result);
+        result
     }
 
-    let mut state = FFTState::new(data);
-    state.skip(repeat_length - 1);
+    fn get_coefs(&self, ix: usize) -> Rc<Vec<(usize, i8)>> {
+        if let Some(rc) = self.coefs.borrow().get(&ix) {
+            return Rc::clone(rc);
+        }
 
-    while !state.done() {
-        state.consume(repeat_length, 1);
-        state.skip(repeat_length);
-        state.consume(repeat_length, -1);
-        state.skip(repeat_length);
+        let result = Rc::new(self.compute_coefs(ix));
+        self.coefs.borrow_mut().insert(ix, Rc::clone(&result));
+
+        result
     }
 
-    state.result()
+    fn compute_coefs(&self, ix: usize) -> Vec<(usize, i8)> {
+        let coefs: Vec<(usize, i8)> = [0_i8, 1, 0, -1]
+            .iter()
+            .flat_map(|&i| repeat(i).take(ix + 1))
+            .cycle()
+            .skip(1)
+            .take(self.len)
+            .enumerate()
+            .filter(|&(_, coef)| coef != 0)
+            .collect();
+        coefs
+    }
+
+    fn message(&self, iterations: u64, offset: usize, len: usize) -> u64 {
+        let digits: Vec<u8> = (offset..offset + len)
+            .map(|i| self.get(iterations, i))
+            .collect();
+
+        from_digits(&digits[..])
+    }
+
+    fn message_offset(&mut self) -> usize {
+        self.message(0, 0, 7) as usize
+    }
+}
+
+fn from_digits(digits: &[u8]) -> u64 {
+    let powers_of_10 = successors(Some(1_u64), |n| Some(n * 10));
+    digits
+        .iter()
+        .rev()
+        .zip(powers_of_10)
+        .map(|(&val, place)| (val as u64) * place)
+        .sum()
 }
 
 impl FromStr for Digits {
     type Err = BadDigit;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let parsed: Result<Vec<i64>, BadDigit> = s
+        let parsed: Result<Vec<u8>, BadDigit> = s
             .trim()
             .bytes()
             .map(|c| {
                 if c < b'0' || c > b'9' {
                     return Err(BadDigit(c));
                 }
-                Ok((c - b'0') as i64)
+                Ok(c - b'0')
             })
             .collect();
 
-        Ok(Digits { data: parsed? })
+        Ok(Digits::from_vec(parsed?))
     }
 }
 
@@ -253,13 +294,15 @@ pub fn run() -> ProblemResult<()> {
     let digits = Digits::for_problem(16)?;
 
     // Part 1
-    let result = fft(digits.data.clone(), 100);
-    println!("FFT(100): {:?}", &result[..8]);
+    let result = digits.message(100, 0, 8);
+    println!("First 8 digits: {}", result);
 
-    // Part 2
-    let big_digits = digits.replicated(10000);
-    let result = fft(big_digits.data, 100);
-    println!("FFT(100): {:?}", &result[..8]);
+    // Part 2 (too slow to run)
+
+    // let mut big_digits = digits.replicated(10000);
+    // let offset = big_digits.message_offset();
+    // println!("message offset: {}", offset);
+    // println!("Secret Message: {}", big_digits.message(100, offset, 8));
 
     Ok(())
 }
