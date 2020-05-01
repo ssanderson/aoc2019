@@ -207,37 +207,30 @@ impl Digits {
     fn precompute_tail(&self, iterations: u64, offset: usize) {
         let precompute_start = max(offset, self.len / 2 + 1);
         let precompute_ixs = precompute_start..self.len;
+        let mut memo = self.memo.borrow_mut();
+
         for iteration in 1..=iterations {
-            let prev: Vec<(usize, u8)> = {
+            let prev: Vec<(usize, u8)> = precompute_ixs
+                .clone()
+                .map(|ix| {
+                    let ref key = MemoKey {
+                        iteration: iteration - 1,
+                        ix,
+                    };
+                    (ix, *memo.get(&key).unwrap())
+                })
+                .collect();
 
-                let memo = self.memo.borrow();
-                precompute_ixs
-                    .clone()
-                    .map(|ix| {
-                        let ref key = MemoKey {
-                            iteration: iteration - 1,
-                            ix,
-                        };
-                        (ix, *memo.get(&key).unwrap())
-                    })
-                    .collect()
-            };
-
-            {
-                let mut memo = self.memo.borrow_mut();
-                let mut cumsum: i64 = 0;
-
-                for &(ix, val) in prev.iter().rev() {
-                    cumsum += val as i64;
-                    memo.insert(
-                        MemoKey {
-                            iteration: iteration,
-                            ix: ix,
-                        },
-                        (cumsum.abs() % 10) as u8,
-                    );
-                }
-
+            let mut cumsum: i64 = 0;
+            for &(ix, val) in prev.iter().rev() {
+                cumsum += val as i64;
+                memo.insert(
+                    MemoKey {
+                        iteration: iteration,
+                        ix: ix,
+                    },
+                    (cumsum.abs() % 10) as u8,
+                );
             }
         }
     }

@@ -23,7 +23,7 @@ impl fmt::Display for SimpleError {
 impl Error for SimpleError {}
 
 #[allow(dead_code)]
-pub fn dbg<T: fmt::Debug>(t: &T) {
+pub fn pp<T: fmt::Debug>(t: &T) {
     println!("{:#?}", t);
 }
 

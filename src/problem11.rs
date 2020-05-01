@@ -121,7 +121,7 @@ registration identifier does it paint on your hull?
 use std::collections::HashMap;
 use std::convert::Into;
 
-use crate::grid::{Coord, Grid, GridElem};
+use crate::grid::{Coord, Direction, Grid, Turn};
 use crate::intcode::{Program, IO};
 use crate::utils::{ProblemInput, ProblemResult};
 
@@ -165,22 +165,6 @@ impl Default for Color {
     }
 }
 
-impl GridElem for Color {}
-
-#[derive(Debug, Clone, Copy)]
-enum Direction {
-    Up,
-    Down,
-    Left,
-    Right,
-}
-
-#[derive(Debug, Clone, Copy)]
-enum Turn {
-    CW,
-    CCW,
-}
-
 impl From<i64> for Turn {
     fn from(i: i64) -> Turn {
         match i {
@@ -209,7 +193,7 @@ impl Robot {
         Robot {
             panels: Grid::new(panels),
             position: (0, 0),
-            direction: Direction::Up,
+            direction: Direction::North,
         }
     }
 
@@ -222,26 +206,16 @@ impl Robot {
     }
 
     fn change_direction(&mut self, turn: Turn) {
-        self.direction = match (self.direction, turn) {
-            (Direction::Up, Turn::CW) => Direction::Right,
-            (Direction::Right, Turn::CW) => Direction::Down,
-            (Direction::Down, Turn::CW) => Direction::Left,
-            (Direction::Left, Turn::CW) => Direction::Up,
-
-            (Direction::Up, Turn::CCW) => Direction::Left,
-            (Direction::Right, Turn::CCW) => Direction::Up,
-            (Direction::Down, Turn::CCW) => Direction::Right,
-            (Direction::Left, Turn::CCW) => Direction::Down,
-        }
+        self.direction = turn.apply(self.direction);
     }
 
     fn move_forward(&mut self) {
         let (x, y) = self.position;
         self.position = match self.direction {
-            Direction::Up => (x, y + 1),
-            Direction::Right => (x + 1, y),
-            Direction::Down => (x, y - 1),
-            Direction::Left => (x - 1, y),
+            Direction::North => (x, y - 1),
+            Direction::East => (x + 1, y),
+            Direction::South => (x, y + 1),
+            Direction::West => (x - 1, y),
         }
     }
 }

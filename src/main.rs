@@ -13,6 +13,7 @@ mod problem13;
 mod problem14;
 mod problem15;
 mod problem16;
+mod problem17;
 mod problem2;
 mod problem3;
 mod problem4;
@@ -43,6 +44,7 @@ fn main() -> utils::ProblemResult<()> {
             "14" => problem14::run(),
             "15" => problem15::run(),
             "16" => problem16::run(),
+            "17" => problem17::run(),
             _ => utils::bail(&format!("Unknown problem: {}", args[1])),
         },
         _ => utils::bail(&format!("Expected 1 arg, got {}", num_args)),

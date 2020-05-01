@@ -153,7 +153,7 @@ Although it hasn't changed, you can still get your puzzle input.
 
 use std::collections::{HashMap, VecDeque};
 
-use crate::grid::{Coord, Grid, GridElem};
+use crate::grid::{Coord, Direction, Grid};
 use crate::intcode::{Program, IO};
 use crate::tree::Tree;
 use crate::utils::{ProblemInput, ProblemResult};
@@ -182,48 +182,12 @@ impl Into<i64> for MoveResult {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
-enum Direction {
-    North = 1,
-    South = 2,
-    West = 3,
-    East = 4,
-}
-
-impl Into<i64> for Direction {
-    fn into(self) -> i64 {
-        self as i64
-    }
-}
-
-impl std::ops::Add<Direction> for Coord {
-    type Output = Coord;
-
-    fn add(self, dir: Direction) -> Coord {
-        match dir {
-            Direction::North => (self.0, self.1 + 1),
-            Direction::West => (self.0 - 1, self.1),
-            Direction::South => (self.0, self.1 - 1),
-            Direction::East => (self.0 + 1, self.1),
-        }
-    }
-}
-
-fn neighbors(loc: Coord) -> [Coord; 4] {
-    [
-        loc + Direction::North,
-        loc + Direction::East,
-        loc + Direction::South,
-        loc + Direction::West,
-    ]
-}
-
 fn direction_between(here: Coord, there: Coord) -> Direction {
     match (there.0 - here.0, there.1 - here.1) {
         (1, 0) => Direction::East,
         (-1, 0) => Direction::West,
-        (0, 1) => Direction::North,
-        (0, -1) => Direction::South,
+        (0, -1) => Direction::North,
+        (0, 1) => Direction::South,
         _ => {
             panic!("Invalid coords: here={:?}, there={:?}", here, there);
         }
@@ -265,8 +229,6 @@ impl Default for Tile {
         Tile::Unknown
     }
 }
-
-impl GridElem for Tile {}
 
 #[derive(Debug, Clone, Copy)]
 struct SpanningTreeState {
@@ -342,17 +304,17 @@ impl Droid {
                     .expect(&format!("Failed to get spanning tree info for {:?}", loc))
                     .depth;
 
-                for adjacent in neighbors(loc).iter() {
-                    match self.grid.get(adjacent) {
+                for (coord, content) in self.grid.neighbors(&loc) {
+                    match content {
                         Tile::Unknown => {
                             self.spanning_tree.insert(
-                                *adjacent,
+                                coord,
                                 SpanningTreeState {
                                     parent: Some(loc),
                                     depth: depth + 1,
                                 },
                             );
-                            self.frontier.push_back(*adjacent);
+                            self.frontier.push_back(coord);
                         }
                         _ => {} // Already explored here.
                     }
@@ -378,10 +340,17 @@ impl Droid {
     }
 
     fn passable_neighbors(&self, loc: Coord) -> Vec<Coord> {
-        neighbors(loc)
-            .iter()
-            .filter(|c| self.grid.get(c).passable())
-            .copied()
+        self.grid
+            .neighbors(&loc)
+            .filter_map(
+                |(coord, tile)| {
+                    if tile.passable() {
+                        Some(coord)
+                    } else {
+                        None
+                    }
+                },
+            )
             .collect()
     }
 
